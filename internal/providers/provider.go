@@ -6,7 +6,10 @@
 //     只需要新增一个实现，Runner 一行不用改。
 package providers
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // Role 是对话消息的角色，沿用 OpenAI 兼容惯例。
 type Role string
@@ -18,23 +21,43 @@ const (
 	RoleTool      Role = "tool"
 )
 
-// Message 是发给/收自 LLM 的一条消息。
-// 第一阶段先只支持纯文本，后面要支持 tool_call / 多模态再扩展。
-type Message struct {
-	Role    Role
-	Content string
+// ToolDefinition describes one function the model is allowed to request.
+type ToolDefinition struct {
+	Name        string
+	Description string
+	Parameters  json.RawMessage
 }
 
-// ChatRequest 是一次"调用 LLM"的输入。
+// ToolCall is one function request returned by a model.
+type ToolCall struct {
+	ID        string
+	Name      string
+	Arguments json.RawMessage
+}
+
+// Message is one item in a model conversation. Assistant messages retain their
+// calls and tool messages retain the matching call ID so provider protocols can
+// replay the required assistant → tool sequence.
+type Message struct {
+	Role       Role
+	Content    string
+	ToolCalls  []ToolCall
+	ToolCallID string
+}
+
+// ChatRequest is one request to a model provider.
 type ChatRequest struct {
 	Model    string
 	Messages []Message
+	Tools    []ToolDefinition
 }
 
-// ChatResponse 是 LLM 的回复。
-// 第一阶段先只放 Content；后面接入 tool calling 再加字段。
+// ChatResponse is a model reply. A non-empty ToolCalls list asks the Runner to
+// execute local tools and submit their results in a follow-up request.
 type ChatResponse struct {
-	Content string
+	Content      string
+	ToolCalls    []ToolCall
+	FinishReason string
 }
 
 // Provider 是 LLM 厂商的统一接口。

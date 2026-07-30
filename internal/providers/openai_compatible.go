@@ -46,28 +46,88 @@ func (p *OpenAICompatibleProvider) Name() string {
 	return p.ProviderName
 }
 
-// ---- 与 OpenAI 一致的请求/响应结构（先只覆盖纯文本对话所需字段） ----
+// ---- 与 OpenAI 一致的请求/响应结构 ----
 
 type openAIChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string           `json:"role"`
+	Content    *string          `json:"content"`
+	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
+	ToolCallID string           `json:"tool_call_id,omitempty"`
+}
+
+type openAIToolCall struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	Function struct {
+		Name      string `json:"name"`
+		Arguments string `json:"arguments"`
+	} `json:"function"`
+}
+
+type openAIToolDefinition struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name        string          `json:"name"`
+		Description string          `json:"description"`
+		Parameters  json.RawMessage `json:"parameters"`
+	} `json:"function"`
 }
 
 type openAIChatRequest struct {
-	Model    string              `json:"model"`
-	Messages []openAIChatMessage `json:"messages"`
-	Stream   bool                `json:"stream"`
+	Model    string                 `json:"model"`
+	Messages []openAIChatMessage    `json:"messages"`
+	Tools    []openAIToolDefinition `json:"tools,omitempty"`
+	Stream   bool                   `json:"stream"`
 }
 
 type openAIChatResponse struct {
 	Choices []struct {
-		Message openAIChatMessage `json:"message"`
+		Message      openAIChatMessage `json:"message"`
+		FinishReason string            `json:"finish_reason"`
 	} `json:"choices"`
 	Error *struct {
 		Message string `json:"message"`
 		Type    string `json:"type"`
 		Code    string `json:"code"`
 	} `json:"error,omitempty"`
+}
+
+func toOpenAIMessage(message Message) openAIChatMessage {
+	wire := openAIChatMessage{
+		Role:       string(message.Role),
+		ToolCallID: message.ToolCallID,
+	}
+	if message.Role != RoleAssistant || len(message.ToolCalls) == 0 || message.Content != "" {
+		content := message.Content
+		wire.Content = &content
+	}
+	for _, call := range message.ToolCalls {
+		wireCall := openAIToolCall{ID: call.ID, Type: "function"}
+		wireCall.Function.Name = call.Name
+		wireCall.Function.Arguments = string(call.Arguments)
+		wire.ToolCalls = append(wire.ToolCalls, wireCall)
+	}
+	return wire
+}
+
+func toOpenAIToolDefinitions(definitions []ToolDefinition) []openAIToolDefinition {
+	if len(definitions) == 0 {
+		return nil
+	}
+
+	wire := make([]openAIToolDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		parameters := definition.Parameters
+		if len(parameters) == 0 {
+			parameters = json.RawMessage(`{"type":"object","properties":{}}`)
+		}
+		entry := openAIToolDefinition{Type: "function"}
+		entry.Function.Name = definition.Name
+		entry.Function.Description = definition.Description
+		entry.Function.Parameters = parameters
+		wire = append(wire, entry)
+	}
+	return wire
 }
 
 // Chat 发起一次 chat completions 调用。
@@ -82,18 +142,16 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 		return ChatResponse{}, errors.New("provider: model is empty")
 	}
 
-	// 1. 把内部 Message 转成 OpenAI wire format。
+	// 1. 把内部会话与工具定义转成 OpenAI wire format。
 	wireMsgs := make([]openAIChatMessage, 0, len(req.Messages))
-	for _, m := range req.Messages {
-		wireMsgs = append(wireMsgs, openAIChatMessage{
-			Role:    string(m.Role),
-			Content: m.Content,
-		})
+	for _, message := range req.Messages {
+		wireMsgs = append(wireMsgs, toOpenAIMessage(message))
 	}
 
 	body, err := json.Marshal(openAIChatRequest{
 		Model:    req.Model,
 		Messages: wireMsgs,
+		Tools:    toOpenAIToolDefinitions(req.Tools),
 		Stream:   false,
 	})
 	if err != nil {
@@ -148,7 +206,31 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 		return ChatResponse{}, errors.New("provider: no choices in response")
 	}
 
-	return ChatResponse{Content: parsed.Choices[0].Message.Content}, nil
+	choice := parsed.Choices[0]
+	content := ""
+	if choice.Message.Content != nil {
+		content = *choice.Message.Content
+	}
+	toolCalls := make([]ToolCall, 0, len(choice.Message.ToolCalls))
+	for _, call := range choice.Message.ToolCalls {
+		if call.ID == "" {
+			return ChatResponse{}, errors.New("provider: tool call is missing an ID")
+		}
+		if call.Function.Name == "" {
+			return ChatResponse{}, errors.New("provider: tool call is missing a function name")
+		}
+		toolCalls = append(toolCalls, ToolCall{
+			ID:        call.ID,
+			Name:      call.Function.Name,
+			Arguments: json.RawMessage([]byte(call.Function.Arguments)),
+		})
+	}
+
+	return ChatResponse{
+		Content:      content,
+		ToolCalls:    toolCalls,
+		FinishReason: choice.FinishReason,
+	}, nil
 }
 
 // truncate 截断超长字符串，避免把整段响应糊到错误里。

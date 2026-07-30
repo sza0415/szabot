@@ -22,6 +22,7 @@ import (
 	"github.com/ziangsun/szabot/internal/bus"
 	"github.com/ziangsun/szabot/internal/channels"
 	"github.com/ziangsun/szabot/internal/providers"
+	"github.com/ziangsun/szabot/internal/tools"
 )
 
 func main() {
@@ -35,9 +36,26 @@ func main() {
 	// 2. 根据环境变量选 Provider。
 	provider, model := buildProvider()
 
+	registry := tools.NewRegistry()
+	workspace, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: resolve workspace: %v\n", err)
+		os.Exit(1)
+	}
+	readFile, err := tools.NewReadFile(workspace)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: create read_file tool: %v\n", err)
+		os.Exit(1)
+	}
+	if err := registry.Register(readFile); err != nil {
+		fmt.Fprintf(os.Stderr, "error: register read_file tool: %v\n", err)
+		os.Exit(1)
+	}
+
 	runner := &agent.Runner{
 		Provider: provider,
 		Model:    model,
+		Tools:    registry,
 	}
 
 	// 3. AgentLoop：从 bus 入站读消息 → 调 Runner → 推回 bus 出站。
