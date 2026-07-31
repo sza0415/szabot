@@ -10,30 +10,88 @@ package agent
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/ziangsun/szabot/internal/providers"
+	"github.com/ziangsun/szabot/internal/tools"
 )
 
-// Runner 负责"跟 LLM 对话"这件事。
+const defaultMaxToolTurns = 12
+
+// Runner coordinates a model conversation and the explicit local tool allowlist.
 type Runner struct {
-	Provider providers.Provider
-	Model    string
+	Provider     providers.Provider
+	Model        string
+	Tools        *tools.Registry
+	MaxToolTurns int
 }
 
-// Run 接收一段已经拼好的对话历史，返回 LLM 的最终回复文本。
-//
-// 第一阶段实现：直接转发给 Provider，拿到 content 就返回。
-// 后续会演进为：
-//  1. 调 Provider；
-//  2. 如果回复包含 tool call → 执行 tool → 把结果塞回 messages → 回到第 1 步；
-//  3. 直到 Provider 给出 final answer 才返回。
+// Run continues until the model returns a normal answer or the tool-call limit
+// is reached. Tool errors are returned to the model as tool results so it can
+// adjust its parameters or choose another capability.
 func (r *Runner) Run(ctx context.Context, messages []providers.Message) (string, error) {
-	resp, err := r.Provider.Chat(ctx, providers.ChatRequest{
-		Model:    r.Model,
-		Messages: messages,
-	})
-	if err != nil {
-		return "", err
+	if r.Provider == nil {
+		return "", fmt.Errorf("agent: provider is nil")
 	}
-	return resp.Content, nil
+
+	conversation := append([]providers.Message(nil), messages...)
+	maxTurns := r.MaxToolTurns
+	if maxTurns <= 0 {
+		maxTurns = defaultMaxToolTurns
+	}
+
+	for turn := 0; turn < maxTurns; turn++ {
+		response, err := r.Provider.Chat(ctx, providers.ChatRequest{
+			Model:    r.Model,
+			Messages: conversation,
+			Tools:    providerToolDefinitions(r.Tools),
+		})
+		if err != nil {
+			return "", err
+		}
+		if len(response.ToolCalls) == 0 {
+			return response.Content, nil
+		}
+
+		conversation = append(conversation, providers.Message{
+			Role:      providers.RoleAssistant,
+			Content:   response.Content,
+			ToolCalls: response.ToolCalls,
+		})
+		for _, call := range response.ToolCalls {
+			if strings.TrimSpace(call.ID) == "" {
+				return "", fmt.Errorf("agent: provider returned a tool call without an ID")
+			}
+
+			result, err := r.Tools.Execute(ctx, call.Name, call.Arguments)
+			if err != nil {
+				result = "Error: " + err.Error()
+			}
+			conversation = append(conversation, providers.Message{
+				Role:       providers.RoleTool,
+				ToolCallID: call.ID,
+				Content:    result,
+			})
+		}
+	}
+
+	return "", fmt.Errorf("agent: exceeded maximum tool turns (%d)", maxTurns)
+}
+
+func providerToolDefinitions(registry *tools.Registry) []providers.ToolDefinition {
+	definitions := registry.Definitions()
+	if len(definitions) == 0 {
+		return nil
+	}
+
+	result := make([]providers.ToolDefinition, 0, len(definitions))
+	for _, definition := range definitions {
+		result = append(result, providers.ToolDefinition{
+			Name:        definition.Name,
+			Description: definition.Description,
+			Parameters:  definition.Parameters,
+		})
+	}
+	return result
 }
