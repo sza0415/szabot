@@ -42,15 +42,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "error: resolve workspace: %v\n", err)
 		os.Exit(1)
 	}
-	readFile, err := tools.NewReadFile(workspace)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: create read_file tool: %v\n", err)
-		os.Exit(1)
-	}
-	if err := registry.Register(readFile); err != nil {
-		fmt.Fprintf(os.Stderr, "error: register read_file tool: %v\n", err)
-		os.Exit(1)
-	}
+	registerTools(registry, workspace)
 
 	runner := &agent.Runner{
 		Provider: provider,
@@ -75,6 +67,104 @@ func main() {
 	// 5. 等退出信号。
 	<-ctx.Done()
 	fmt.Println("\nszabot stopped.")
+}
+
+// registerTools 把工作区内的本地工具装进 registry。
+//
+// 每个工具都被限制在 workspace 内（沙盒边界），任何创建/注册失败都视为致命错误：
+// 工具集是 agent 的能力清单，缺失会让行为不可预测，宁可启动即失败。
+func registerTools(registry *tools.Registry, workspace string) {
+	type factory struct {
+		name  string
+		build func(string) (tools.Tool, error)
+	}
+	factories := []factory{
+		{"read_file", func(ws string) (tools.Tool, error) { return tools.NewReadFile(ws) }},
+		{"write_file", func(ws string) (tools.Tool, error) { return tools.NewWriteFile(ws) }},
+		{"edit_file", func(ws string) (tools.Tool, error) { return tools.NewEditFile(ws) }},
+		{"list_dir", func(ws string) (tools.Tool, error) { return tools.NewListDir(ws) }},
+		{"glob", func(ws string) (tools.Tool, error) { return tools.NewGlob(ws) }},
+		{"grep", func(ws string) (tools.Tool, error) { return tools.NewGrep(ws) }},
+	}
+
+	for _, f := range factories {
+		tool, err := f.build(workspace)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: create %s tool: %v\n", f.name, err)
+			os.Exit(1)
+		}
+		if err := registry.Register(tool); err != nil {
+			fmt.Fprintf(os.Stderr, "error: register %s tool: %v\n", f.name, err)
+			os.Exit(1)
+		}
+	}
+
+	registerSandboxTools(registry, workspace)
+}
+
+// registerSandboxTools 注册需要 Docker 沙盒的执行类工具（bash / python）。
+//
+// 设计取舍：这两个工具依赖本机 Docker，属于"能力增强"而非"核心必需"。
+// 因此当 SZABOT_SANDBOX 未开启，或 Docker 不可用时，只打印提示并跳过，
+// 而不是让整个程序启动失败——没装 Docker 的用户仍能用文件类工具。
+//
+// 开启方式：
+//   - export SZABOT_SANDBOX=1            启用 bash + python
+//   - export SZABOT_SANDBOX_NETWORK=1    额外允许容器联网（默认断网）
+//   - export SZABOT_PYTHON_IMAGE=...     python 镜像，默认 python:3.12-slim
+//   - export SZABOT_BASH_IMAGE=...       bash 镜像，默认 debian:stable-slim
+func registerSandboxTools(registry *tools.Registry, workspace string) {
+	if os.Getenv("SZABOT_SANDBOX") == "" {
+		return
+	}
+
+	network := os.Getenv("SZABOT_SANDBOX_NETWORK") != ""
+	pythonImage := envOr("SZABOT_PYTHON_IMAGE", "python:3.12-slim")
+	bashImage := envOr("SZABOT_BASH_IMAGE", "debian:stable-slim")
+
+	bashSandbox, err := tools.NewSandbox(tools.SandboxConfig{
+		Image:     bashImage,
+		Workspace: workspace,
+		Network:   network,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: sandbox unavailable, skipping bash/python: %v\n", err)
+		return
+	}
+	pythonSandbox, err := tools.NewSandbox(tools.SandboxConfig{
+		Image:     pythonImage,
+		Workspace: workspace,
+		Network:   network,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: sandbox unavailable, skipping bash/python: %v\n", err)
+		return
+	}
+
+	bash, err := tools.NewBash(bashSandbox)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: create bash tool: %v\n", err)
+		return
+	}
+	python, err := tools.NewPython(pythonSandbox)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: create python tool: %v\n", err)
+		return
+	}
+
+	for name, tool := range map[string]tools.Tool{"bash": bash, "python": python} {
+		if err := registry.Register(tool); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: register %s tool: %v\n", name, err)
+		}
+	}
+	fmt.Printf("sandbox tools enabled: bash(%s) python(%s) network=%v\n", bashImage, pythonImage, network)
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // buildProvider 根据环境变量决定用哪个 Provider。

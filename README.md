@@ -68,10 +68,34 @@ go run ./cmd/szabot
 - [x] M6 OpenAI 兼容 Provider（DeepSeek 已接入）
 - [ ] M7 配置加载（~/.szabot/config.json）
 - [ ] M8 Session 存储（jsonl）
-- [ ] M9 Tool 接口 + 第一个工具
-- [ ] M10 Runner 多轮 + tool calling 循环
+- [x] M9 Tool 接口 + 文件工具（read/write/edit/list_dir/glob/grep）
+- [x] M10 Runner 多轮 + tool calling 循环
+- [x] M10.5 执行类工具 bash/python（Docker 沙盒，SZABOT_SANDBOX=1 启用）
 - [ ] M11 第二个 Channel（HTTP/WebSocket）
 - [ ] M12 长期记忆（MEMORY.md）
+
+## 工具箱
+
+| 工具 | 说明 | 依赖 |
+|---|---|---|
+| `read_file` / `write_file` / `edit_file` | 读 / 覆盖写 / 精确替换，限制在工作区内 | 无 |
+| `list_dir` | 列目录（可递归），忽略 .git/node_modules 等噪声 | 无 |
+| `glob` | 按文件名模式查找，支持 `**` 递归 | 无 |
+| `grep` | 按正则搜索文件内容 | 无 |
+| `bash` | 在 Docker 沙盒执行 bash，默认断网 | Docker + `SZABOT_SANDBOX=1` |
+| `python` | 代码解释器，在 Docker 沙盒执行 Python | Docker + `SZABOT_SANDBOX=1` |
+
+启用沙盒工具：
+
+```bash
+export SZABOT_SANDBOX=1              # 启用 bash + python
+# 可选：
+# export SZABOT_SANDBOX_NETWORK=1   # 允许容器联网（默认断网）
+# export SZABOT_PYTHON_IMAGE=python:3.12-slim
+# export SZABOT_BASH_IMAGE=debian:stable-slim
+```
+
+未安装 Docker 时会自动跳过 bash/python，文件类工具照常可用。
 
 ## 设计宪法
 

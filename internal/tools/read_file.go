@@ -33,26 +33,10 @@ type ReadFileTool struct {
 
 // NewReadFile creates a read-only file tool scoped to workspace.
 func NewReadFile(workspace string) (*ReadFileTool, error) {
-	if strings.TrimSpace(workspace) == "" {
-		return nil, fmt.Errorf("read_file: workspace is empty")
-	}
-
-	absoluteWorkspace, err := filepath.Abs(workspace)
+	resolvedWorkspace, err := resolveWorkspace(workspace)
 	if err != nil {
-		return nil, fmt.Errorf("read_file: resolve workspace: %w", err)
+		return nil, fmt.Errorf("read_file: %w", err)
 	}
-	resolvedWorkspace, err := filepath.EvalSymlinks(absoluteWorkspace)
-	if err != nil {
-		return nil, fmt.Errorf("read_file: resolve workspace symlinks: %w", err)
-	}
-	info, err := os.Stat(resolvedWorkspace)
-	if err != nil {
-		return nil, fmt.Errorf("read_file: stat workspace: %w", err)
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("read_file: workspace is not a directory: %s", resolvedWorkspace)
-	}
-
 	return &ReadFileTool{workspace: resolvedWorkspace, maxBytes: defaultReadFileMaxBytes}, nil
 }
 
@@ -86,16 +70,10 @@ func (t *ReadFileTool) Execute(ctx context.Context, raw json.RawMessage) (string
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return "", fmt.Errorf("read_file: decode arguments: %w", err)
 	}
-	if strings.TrimSpace(args.Path) == "" {
-		return "", fmt.Errorf("read_file: path is required")
-	}
-	if filepath.IsAbs(args.Path) {
-		return "", fmt.Errorf("read_file: path must be relative to the workspace")
-	}
 
-	candidate := filepath.Clean(filepath.Join(t.workspace, args.Path))
-	if !isWithinWorkspace(t.workspace, candidate) {
-		return "", fmt.Errorf("read_file: path escapes the workspace")
+	candidate, err := joinInWorkspace(t.workspace, args.Path)
+	if err != nil {
+		return "", fmt.Errorf("read_file: %w", err)
 	}
 
 	resolved, err := filepath.EvalSymlinks(candidate)
