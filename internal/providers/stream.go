@@ -27,6 +27,9 @@ type openAIStreamChunk struct {
 		Delta struct {
 			Content   *string                `json:"content"`
 			ToolCalls []openAIStreamToolCall `json:"tool_calls"`
+			// 推理增量。DeepSeek 等用 reasoning_content，部分实现用 reasoning。
+			ReasoningContent *string `json:"reasoning_content"`
+			Reasoning        *string `json:"reasoning"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
@@ -155,6 +158,7 @@ func (p *OpenAICompatibleProvider) ChatStream(
 	}
 
 	var content strings.Builder
+	var reasoning strings.Builder
 	tools := newToolCallAccumulator()
 	finishReason := ""
 
@@ -191,6 +195,19 @@ func (p *OpenAICompatibleProvider) ChatStream(
 		}
 		choice := chunk.Choices[0]
 
+		// 推理增量先于正文到达（推理型模型会先"想"再"说"）。
+		reasoningDelta := choice.Delta.ReasoningContent
+		if reasoningDelta == nil {
+			reasoningDelta = choice.Delta.Reasoning
+		}
+		if reasoningDelta != nil && *reasoningDelta != "" {
+			delta := *reasoningDelta
+			reasoning.WriteString(delta)
+			if err := onChunk(StreamChunk{ReasoningDelta: delta}); err != nil {
+				return ChatResponse{}, err
+			}
+		}
+
 		if choice.Delta.Content != nil && *choice.Delta.Content != "" {
 			delta := *choice.Delta.Content
 			content.WriteString(delta)
@@ -226,6 +243,7 @@ func (p *OpenAICompatibleProvider) ChatStream(
 
 	return ChatResponse{
 		Content:      content.String(),
+		Reasoning:    reasoning.String(),
 		ToolCalls:    toolCalls,
 		FinishReason: finishReason,
 	}, nil

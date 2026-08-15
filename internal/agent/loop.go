@@ -81,37 +81,45 @@ func (l *Loop) handle(ctx context.Context, in bus.InboundMessage) {
 	messages = append(messages, history...)
 	messages = append(messages, userMsg)
 
-	// 流式：Runner 每吐一段正文增量，就作为一条 Delta 分片推回 bus，
-	// channel 收到后边收边显示。Runner 内部会累积出完整回复作为返回值。
-	onDelta := func(delta string) {
-		if delta == "" {
+	// 出站分片的统一发送器：按 Kind 区分正文 / 推理 / 工具调用 / 工具结果。
+	// 都以 Delta=true 的分片形式流过 bus，channel 可据 Kind 分区渲染。
+	emit := func(kind bus.OutboundKind, text string) {
+		if text == "" {
 			return
 		}
 		out := bus.OutboundMessage{
 			SessionID: in.SessionID,
 			ChannelID: in.ChannelID,
-			Text:      delta,
+			Text:      text,
+			Kind:      kind,
 			Delta:     true,
 			Time:      time.Now(),
 		}
 		if err := l.Bus.PublishOutbound(ctx, out); err != nil {
-			log.Printf("[loop] publish delta error: %v", err)
+			log.Printf("[loop] publish %s error: %v", kindLabel(kind), err)
 		}
 	}
 
-	reply, err := l.Runner.RunStream(ctx, messages, onDelta)
+	// Runner 把一轮内部发生的每类事件都回调出来：
+	//   - 正文增量：边收边显示，也是最终答案；
+	//   - 推理增量：推理型模型的思考过程，单独一路推送供前端折叠展示；
+	//   - 工具调用/结果：让用户看到 agent 正在"做什么"，而非只有最终文本。
+	sink := newLoopSink(emit)
+
+	result, err := l.Runner.RunCollect(ctx, messages, sink)
 	if err != nil {
 		log.Printf("[loop] runner error session=%s: %v", in.SessionID, err)
 		return
 	}
 
-	// 3. 回写历史：把本轮 user 和 assistant 回复追加进 Store，
-	//    下一轮 Load 就能带上它们。system prompt 不写入。
+	// 3. 回写历史：把本轮 user 以及 Runner 产生的全部消息（含推理过程、
+	//    工具调用与工具结果）追加进 Store。这样 session jsonl 不再只剩
+	//    纯文本，而是完整记录了推理与工具调用轨迹，下一轮 Load 也能带上。
 	if l.Store != nil {
-		if err := l.Store.Append(in.SessionID,
-			userMsg,
-			providers.Message{Role: providers.RoleAssistant, Content: reply},
-		); err != nil {
+		history := make([]providers.Message, 0, len(result.Messages)+1)
+		history = append(history, userMsg)
+		history = append(history, result.Messages...)
+		if err := l.Store.Append(in.SessionID, history...); err != nil {
 			log.Printf("[loop] append session=%s error: %v", in.SessionID, err)
 		}
 	}
@@ -126,5 +134,57 @@ func (l *Loop) handle(ctx context.Context, in bus.InboundMessage) {
 	}
 	if err := l.Bus.PublishOutbound(ctx, done); err != nil {
 		log.Printf("[loop] publish done error: %v", err)
+	}
+}
+
+// newLoopSink 把统一的 emit 发送器适配成 Runner 需要的 StreamSink：
+// 每类事件各走一条对应 Kind 的出站分片。工具调用/结果会被格式化成
+// 简短可读的文本，供 channel 直接展示。
+func newLoopSink(emit func(bus.OutboundKind, string)) StreamSink {
+	return StreamSink{
+		OnContentDelta: func(delta string) { emit(bus.KindAnswer, delta) },
+		OnReasoningDelta: func(delta string) {
+			emit(bus.KindReasoning, delta)
+		},
+		OnToolCall: func(call providers.ToolCall) {
+			emit(bus.KindToolCall, formatToolCall(call))
+		},
+		OnToolResult: func(call providers.ToolCall, result string) {
+			emit(bus.KindToolResult, formatToolResult(call, result))
+		},
+	}
+}
+
+// formatToolCall 把一次工具调用渲染成 "name(arguments)" 形式。
+func formatToolCall(call providers.ToolCall) string {
+	args := string(call.Arguments)
+	if args == "" || args == "null" {
+		return call.Name + "()"
+	}
+	return call.Name + "(" + args + ")"
+}
+
+// formatToolResult 把一次工具结果渲染成 "name -> result" 形式，
+// 过长时截断，避免刷屏。
+func formatToolResult(call providers.ToolCall, result string) string {
+	const maxResultRunes = 500
+	trimmed := result
+	if r := []rune(result); len(r) > maxResultRunes {
+		trimmed = string(r[:maxResultRunes]) + "…(truncated)"
+	}
+	return call.Name + " -> " + trimmed
+}
+
+// kindLabel 给日志用的可读标签。
+func kindLabel(kind bus.OutboundKind) string {
+	switch kind {
+	case bus.KindReasoning:
+		return "reasoning"
+	case bus.KindToolCall:
+		return "tool_call"
+	case bus.KindToolResult:
+		return "tool_result"
+	default:
+		return "delta"
 	}
 }

@@ -41,9 +41,14 @@ type ToolCall struct {
 //
 // JSON tags are explicit so that the on-disk session log (jsonl) has a stable,
 // readable schema independent of Go field names.
+//
+// Reasoning 保存推理型模型（如 DeepSeek-R1、OpenAI o 系列）在正文之外单独
+// 给出的"思考过程"。它只做展示与回放之用，不会作为 content 回传给模型，
+// 因此用独立字段承载，避免污染 content。
 type Message struct {
 	Role       Role       `json:"role"`
 	Content    string     `json:"content,omitempty"`
+	Reasoning  string     `json:"reasoning,omitempty"`
 	ToolCalls  []ToolCall `json:"toolCalls,omitempty"`
 	ToolCallID string     `json:"toolCallId,omitempty"`
 }
@@ -58,7 +63,10 @@ type ChatRequest struct {
 // ChatResponse is a model reply. A non-empty ToolCalls list asks the Runner to
 // execute local tools and submit their results in a follow-up request.
 type ChatResponse struct {
-	Content      string
+	Content string
+	// Reasoning 是推理型模型单独返回的思考过程（reasoning_content），
+	// 可能为空。它与 Content 相互独立。
+	Reasoning    string
 	ToolCalls    []ToolCall
 	FinishReason string
 }
@@ -75,13 +83,16 @@ type Provider interface {
 //
 // 一次流式调用会回调多次：
 //   - 文本增量：ContentDelta 非空（拼起来就是完整回复正文）；
+//   - 推理增量：ReasoningDelta 非空（拼起来就是完整思考过程，
+//     推理型模型专有，普通模型永远为空）；
 //   - 工具调用：provider 把分片拼装完成后，通过 ToolCalls 一次性给出；
 //   - 结束标记：Done=true，并带上 FinishReason。
 type StreamChunk struct {
-	ContentDelta string
-	ToolCalls    []ToolCall
-	Done         bool
-	FinishReason string
+	ContentDelta   string
+	ReasoningDelta string
+	ToolCalls      []ToolCall
+	Done           bool
+	FinishReason   string
 }
 
 // StreamingProvider 是"可选能力"：实现了它的 Provider 支持流式输出。

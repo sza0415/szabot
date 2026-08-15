@@ -31,6 +31,27 @@ type InboundMessage struct {
 	Meta map[string]any
 }
 
+// OutboundKind 标识一条出站消息承载的是哪一类内容。
+//
+// 引入它之前，出站流只能表达"正文增量/结束"两种状态，推理过程与工具调用
+// 无从区分。channel 侧（CLI/Web）可据此把思考、工具调用、正文分区渲染，
+// 而无需猜测 Text 的语义。
+//
+// 兼容性：Kind 为空（零值 KindAnswer）时等价于旧的"正文"语义，
+// 旧 channel 无需改动即可继续把 Text 当正文处理。
+type OutboundKind string
+
+const (
+	// KindAnswer 是面向用户的正文（默认值，兼容旧行为）。
+	KindAnswer OutboundKind = ""
+	// KindReasoning 是推理型模型的思考过程增量。
+	KindReasoning OutboundKind = "reasoning"
+	// KindToolCall 表示模型请求调用某个工具（Text 为可读描述）。
+	KindToolCall OutboundKind = "tool_call"
+	// KindToolResult 表示某次工具调用的执行结果（Text 为结果摘要）。
+	KindToolResult OutboundKind = "tool_result"
+)
+
 // OutboundMessage 表示由 agent 产生、要发回某个 channel 的消息。
 //
 // 流式支持：一段完整回复会被拆成"多条分片 + 一条结束标记"流过 bus：
@@ -38,10 +59,15 @@ type InboundMessage struct {
 //   - 结束消息：Done=true，Text 通常为空（正文已由前面的分片给完）；
 //   - 非流式/回退：也可以只发一条 Delta=false、Done=false 的完整消息，
 //     channel 直接把它当作一整段回复处理即可（向后兼容）。
+//
+// 内容类型：Kind 区分正文 / 推理过程 / 工具调用 / 工具结果。默认零值
+// (KindAnswer) 表示正文，从而旧 channel 无需改动即可继续工作。
 type OutboundMessage struct {
 	SessionID string
 	ChannelID string
 	Text      string
+	// Kind 标识本条消息的内容类型，默认 KindAnswer（正文）。
+	Kind OutboundKind
 	// Delta 为 true 表示这是一段增量（流式输出中的一小块）。
 	Delta bool
 	// Done 为 true 表示本轮回复到此结束（流式收尾标记）。

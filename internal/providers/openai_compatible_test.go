@@ -99,3 +99,31 @@ func TestOpenAICompatibleProviderToolCallRoundTrip(t *testing.T) {
 		t.Fatalf("second response = %#v", second)
 	}
 }
+
+// TestChatParsesReasoningContent 验证：推理型模型返回的 reasoning_content
+// 会被解析进 ChatResponse.Reasoning，且不污染 Content。
+func TestChatParsesReasoningContent(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"答案","reasoning_content":"我的思考过程"}}]}`))
+	}))
+	defer server.Close()
+
+	provider := &OpenAICompatibleProvider{
+		BaseURL:    server.URL,
+		APIKey:     "k",
+		HTTPClient: server.Client(),
+	}
+	resp, err := provider.Chat(context.Background(), ChatRequest{
+		Model:    "reasoner",
+		Messages: []Message{{Role: RoleUser, Content: "hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Chat() error = %v", err)
+	}
+	if resp.Content != "答案" {
+		t.Fatalf("content = %q, want 答案", resp.Content)
+	}
+	if resp.Reasoning != "我的思考过程" {
+		t.Fatalf("reasoning = %q, want 我的思考过程", resp.Reasoning)
+	}
+}

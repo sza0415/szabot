@@ -101,6 +101,43 @@ func TestChatStreamToolCallsAcrossChunks(t *testing.T) {
 	}
 }
 
+// TestChatStreamReasoning 验证：流式 reasoning_content 增量被单独回调为
+// ReasoningDelta，并累积进 ChatResponse.Reasoning，与正文互不混淆。
+func TestChatStreamReasoning(t *testing.T) {
+	sse := "" +
+		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"想\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"法\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"答\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"content\":\"案\"},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n"
+
+	server := sseServer(t, sse)
+	defer server.Close()
+
+	p := &OpenAICompatibleProvider{ProviderName: "test", BaseURL: server.URL, APIKey: "k"}
+
+	var content, reasoning string
+	resp, err := p.ChatStream(context.Background(),
+		ChatRequest{Model: "m", Messages: []Message{{Role: RoleUser, Content: "hi"}}},
+		func(c StreamChunk) error {
+			content += c.ContentDelta
+			reasoning += c.ReasoningDelta
+			return nil
+		})
+	if err != nil {
+		t.Fatalf("ChatStream() error = %v", err)
+	}
+	if content != "答案" {
+		t.Fatalf("streamed content = %q, want 答案", content)
+	}
+	if reasoning != "想法" {
+		t.Fatalf("streamed reasoning = %q, want 想法", reasoning)
+	}
+	if resp.Content != "答案" || resp.Reasoning != "想法" {
+		t.Fatalf("accumulated resp = %#v", resp)
+	}
+}
+
 // TestChatStreamHTTPError 验证非 2xx 时返回带状态码的错误。
 func TestChatStreamHTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

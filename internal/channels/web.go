@@ -282,8 +282,13 @@ func (w *WebChannel) handleStream(rw http.ResponseWriter, r *http.Request) {
 			fmt.Fprint(rw, ": keep-alive\n\n")
 			flusher.Flush()
 		case out := <-sub.events:
+			kind := string(out.Kind)
+			if kind == "" {
+				kind = "answer"
+			}
 			payload, err := json.Marshal(map[string]any{
 				"text":  out.Text,
+				"kind":  kind,
 				"delta": out.Delta,
 				"done":  out.Done,
 			})
