@@ -97,6 +97,67 @@ export SZABOT_SANDBOX=1              # 启用 bash + python
 
 未安装 Docker 时会自动跳过 bash/python，文件类工具照常可用。
 
+### 安装 Docker（macOS）
+
+`bash` / `python` 两个执行类工具共用一个沙盒，而该沙盒是 `docker run` 的封装
+（见 `internal/tools/sandbox.go`）。因此要用这两个工具，本机必须装有 Docker 且 daemon 在运行。
+
+Apple Silicon / Intel 通用步骤（Homebrew）：
+
+```bash
+# 1. 安装 Docker Desktop（含 docker CLI）
+brew install --cask docker
+
+# 2. 启动 Docker（装完不会自动起，需手动打开一次）
+open -a Docker
+# 首次打开需同意条款，等菜单栏鲸鱼图标停止转圈（约 1-2 分钟）
+
+# 3. 确认 docker 可用（能打印 Server 版本即成功）
+docker version
+
+# 4.（可选）预拉镜像，避免首次调用时现拉很慢
+docker pull debian:stable-slim
+docker pull python:3.12-slim
+```
+
+> 若第 3 步提示 `command not found`，新开一个终端窗口让 PATH 生效即可。
+
+装好后，开着 Docker 重新启动 szabot 并启用沙盒：
+
+```bash
+export SZABOT_SANDBOX=1
+go run ./cmd/szabot
+```
+
+启动日志出现下面这行，才表示 `bash` / `python` 已就绪：
+
+```
+sandbox tools enabled: bash(debian:stable-slim) python(python:3.12-slim) network=false
+```
+
+## 技能（Skills）
+
+技能位于 workspace 的 `skills/` 目录，采用三层渐进式披露：L1 元数据常驻 system prompt，
+L2 正文（`SKILL.md`）与 L3 子资源由 agent 用 `read_file` 按需读取。详见
+`internal/skills/`。
+
+### rycli：影视综专家模式（离线模拟）
+
+`skills/rycli/` 模拟"如影 CLI"的专家问答，覆盖营销 / 综艺模式 / 综艺营销 / 小说 / 剧本
+五类专家。底层用 workspace 内自带的纯 bash 脚本 `skills/rycli/bin/sage-sim` 离线模拟
+`rycli sage ask` 的输入输出契约（`<thread_id>` 多轮 + `<text>` 正文），无需真实联网服务。
+
+> ⚠️ 该 skill 的执行路径落在 `bash` 工具上，因此**依赖 Docker 沙盒**（`SZABOT_SANDBOX=1`）。
+> 未开启沙盒时 agent 会读到 skill 却无法执行脚本。请先按上文装好 Docker。
+
+用法：启用沙盒后，用自然语言直接描述专家意图即可，agent 会自动读取 skill 并调用脚本：
+
+```
+> 帮我给一部都市剧做上线首周的营销方案
+> 帮我拆解一下这类推理综艺的模式，能不能本土化改编
+> 帮我写一份某综艺这周的营销周报
+```
+
 ## 设计宪法
 
 1. **Core stays small** — 所有新功能挂在 channel/tool/provider 边上，不往 loop 塞业务。
