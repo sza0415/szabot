@@ -94,15 +94,14 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A["main"] --> B["sessionDir()"]
+    A["main"] --> B["sessionDir(workspace)"]
     B --> B1["SZABOT_SESSION_DIR<br/>（显式指定优先）"]
-    B --> B2["~/.szabot/sessions<br/>（默认）"]
-    B --> B3["./.szabot/sessions<br/>（取不到 HOME 时兜底）"]
+    B --> B2["工作区/sessionlogs<br/>（默认）"]
     B --> C["NewSessionStore(dir)"]
     C --> D["Loop{Bus, Runner, Store, SystemPrompt}"]
 ```
 
-存储目录默认 `~/.szabot/sessions`（对齐路线图对 `~/.szabot` 的规划），可用环境变量 `SZABOT_SESSION_DIR` 覆盖。
+存储目录默认落在**工作区下的 `sessionlogs/`**，可用环境变量 `SZABOT_SESSION_DIR` 覆盖。
 
 ---
 
@@ -310,7 +309,7 @@ szabot> 你好，小明！（逐字出现）
 szabot> 你叫小明。（记住了上一轮）
 ```
 
-历史文件落在 `~/.szabot/sessions/cli:local.jsonl`（可用 `SZABOT_SESSION_DIR` 改目录）。
+历史文件落在 `sessionlogs/cli:local.jsonl`（工作区下，可用 `SZABOT_SESSION_DIR` 改目录）。
 
 说明：
 

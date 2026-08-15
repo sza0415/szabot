@@ -4,7 +4,7 @@
 //  1. 创建一条 MessageBus；
 //  2. 根据环境变量选择 Provider（echo / deepseek）；
 //  3. 用 bus + runner 创建 AgentLoop 并启动；
-//  4. 用 bus 创建 CLIChannel 并启动；
+//  4. 二选一起前端 channel：SZABOT_WEB 起 Web，否则起 CLI；
 //  5. 等系统信号退出。
 //
 // 没有任何业务逻辑，所有逻辑都被关在了对应的 package 里——
@@ -59,9 +59,9 @@ func main() {
 	systemPrompt := buildSystemPrompt(workspace)
 
 	// Session 存储（M8）：按 SessionID 把对话历史落盘为 jsonl。
-	// 默认落在 ~/.szabot/sessions，可用 SZABOT_SESSION_DIR 覆盖。
+	// 默认落在 工作区/sessionlogs，可用 SZABOT_SESSION_DIR 覆盖。
 	// 有了它，同一 session 的后续请求才会带上此前的对话历史。
-	store, err := agent.NewSessionStore(sessionDir())
+	store, err := agent.NewSessionStore(sessionDir(workspace))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: init session store: %v\n", err)
 		os.Exit(1)
@@ -71,15 +71,36 @@ func main() {
 	loop := &agent.Loop{Bus: b, Runner: runner, Store: store, SystemPrompt: systemPrompt}
 	loop.Start(ctx)
 
-	// 4. CLIChannel：stdin → bus 入站；bus 出站 → stdout。
-	cli := &channels.CLIChannel{
-		ID:  "cli",
-		Bus: b,
-	}
-	cli.Start(ctx)
+	// 4. 选择前端 channel。
+	//
+	// CLI 与 Web 都监听同一条 bus.Outbound()，两者一起跑会互相抢消息，
+	// 因此这里二选一：设置了 SZABOT_WEB 就起 Web，否则维持原来的 CLI 行为。
+	//   - SZABOT_WEB=1            启用 Web 界面（默认监听 :8080）
+	//   - SZABOT_WEB_ADDR=:9000   自定义监听地址
+	if os.Getenv("SZABOT_WEB") != "" {
+		addr := envOr("SZABOT_WEB_ADDR", ":8080")
+		web := &channels.WebChannel{
+			ID:   "web",
+			Bus:  b,
+			Addr: addr,
+		}
+		if err := web.Start(ctx); err != nil {
+			fmt.Fprintf(os.Stderr, "error: start web channel: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("szabot started. provider=%s model=%s. open http://localhost%s in your browser. Ctrl+C to quit.\n",
+			provider.Name(), model, addr)
+	} else {
+		// CLIChannel：stdin → bus 入站；bus 出站 → stdout。
+		cli := &channels.CLIChannel{
+			ID:  "cli",
+			Bus: b,
+		}
+		cli.Start(ctx)
 
-	fmt.Printf("szabot started. provider=%s model=%s. type something and press Enter. Ctrl+C to quit.\n",
-		provider.Name(), model)
+		fmt.Printf("szabot started. provider=%s model=%s. type something and press Enter. Ctrl+C to quit.\n",
+			provider.Name(), model)
+	}
 
 	// 5. 等退出信号。
 	<-ctx.Done()
@@ -220,19 +241,14 @@ func envOr(key, fallback string) string {
 
 // sessionDir 决定会话历史（jsonl）的落盘目录。
 //
-//   - 显式设置 SZABOT_SESSION_DIR 时用它；
-//   - 否则默认 ~/.szabot/sessions；
-//   - 连用户主目录都取不到（极少见）时，退回工作目录下的 .szabot/sessions，
-//     保证程序仍能启动而不是直接失败。
-func sessionDir() string {
+//   - 显式设置 SZABOT_SESSION_DIR 时用它（可为绝对或相对路径）；
+//   - 否则默认落在 工作区/sessionlogs，即 szabot 启动目录下的 sessionlogs 子目录，
+//     便于随项目查看/清理会话历史。
+func sessionDir(workspace string) string {
 	if dir := os.Getenv("SZABOT_SESSION_DIR"); dir != "" {
 		return dir
 	}
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return filepath.Join(".szabot", "sessions")
-	}
-	return filepath.Join(home, ".szabot", "sessions")
+	return filepath.Join(workspace, "sessionlogs")
 }
 
 // buildProvider 根据环境变量决定用哪个 Provider。
