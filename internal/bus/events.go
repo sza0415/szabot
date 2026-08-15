@@ -32,10 +32,20 @@ type InboundMessage struct {
 }
 
 // OutboundMessage 表示由 agent 产生、要发回某个 channel 的消息。
+//
+// 流式支持：一段完整回复会被拆成"多条分片 + 一条结束标记"流过 bus：
+//   - 分片消息：Delta=true，Text 是本次新增的一小段正文；
+//   - 结束消息：Done=true，Text 通常为空（正文已由前面的分片给完）；
+//   - 非流式/回退：也可以只发一条 Delta=false、Done=false 的完整消息，
+//     channel 直接把它当作一整段回复处理即可（向后兼容）。
 type OutboundMessage struct {
 	SessionID string
 	ChannelID string
 	Text      string
-	Time      time.Time
-	Meta      map[string]any
+	// Delta 为 true 表示这是一段增量（流式输出中的一小块）。
+	Delta bool
+	// Done 为 true 表示本轮回复到此结束（流式收尾标记）。
+	Done bool
+	Time time.Time
+	Meta map[string]any
 }

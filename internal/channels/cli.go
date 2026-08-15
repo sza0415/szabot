@@ -81,8 +81,14 @@ func (c *CLIChannel) readLoop(ctx context.Context) {
 	}
 }
 
-// writeLoop：从 outbound 接消息，挑出属于自己的，打印出来。
+// writeLoop：从 outbound 接消息，挑出属于自己的，按流式标记打印。
+//
+// 一段回复的到达顺序通常是：若干条 Delta（增量正文）→ 一条 Done（收尾）。
+//   - 第一条 Delta 前打印 "\nszabot> " 前缀，之后的 Delta 直接追加、不换行；
+//   - Done 到达时补一个换行并重打输入提示符 "> "；
+//   - 兼容非流式：既非 Delta 也非 Done 的整段消息，按老行为一次性打印。
 func (c *CLIChannel) writeLoop(ctx context.Context) {
+	streaming := false // 本轮是否已打印过 "szabot> " 前缀
 	for {
 		select {
 		case <-ctx.Done():
@@ -95,7 +101,28 @@ func (c *CLIChannel) writeLoop(ctx context.Context) {
 			if out.ChannelID != c.ID {
 				continue
 			}
-			fmt.Fprintf(c.Out, "\nszabot> %s\n> ", out.Text)
+
+			switch {
+			case out.Delta:
+				if !streaming {
+					fmt.Fprint(c.Out, "\nszabot> ")
+					streaming = true
+				}
+				fmt.Fprint(c.Out, out.Text)
+
+			case out.Done:
+				// 收尾：无论中途是否有过增量，都换行并重打提示符。
+				if !streaming {
+					// 没有任何正文的空回复，也给个前缀避免光标错乱。
+					fmt.Fprint(c.Out, "\nszabot> ")
+				}
+				fmt.Fprint(c.Out, "\n> ")
+				streaming = false
+
+			default:
+				// 非流式的整段消息：保持老行为。
+				fmt.Fprintf(c.Out, "\nszabot> %s\n> ", out.Text)
+			}
 		}
 	}
 }

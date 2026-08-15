@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -57,8 +58,17 @@ func main() {
 	// 无需专门的 skill 工具。
 	systemPrompt := buildSystemPrompt(workspace)
 
-	// 3. AgentLoop：从 bus 入站读消息 → 调 Runner → 推回 bus 出站。
-	loop := &agent.Loop{Bus: b, Runner: runner, SystemPrompt: systemPrompt}
+	// Session 存储（M8）：按 SessionID 把对话历史落盘为 jsonl。
+	// 默认落在 ~/.szabot/sessions，可用 SZABOT_SESSION_DIR 覆盖。
+	// 有了它，同一 session 的后续请求才会带上此前的对话历史。
+	store, err := agent.NewSessionStore(sessionDir())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: init session store: %v\n", err)
+		os.Exit(1)
+	}
+
+	// 3. AgentLoop：从 bus 入站读消息 → 加载历史 → 调 Runner → 回写历史 → 推回 bus 出站。
+	loop := &agent.Loop{Bus: b, Runner: runner, Store: store, SystemPrompt: systemPrompt}
 	loop.Start(ctx)
 
 	// 4. CLIChannel：stdin → bus 入站；bus 出站 → stdout。
@@ -206,6 +216,23 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// sessionDir 决定会话历史（jsonl）的落盘目录。
+//
+//   - 显式设置 SZABOT_SESSION_DIR 时用它；
+//   - 否则默认 ~/.szabot/sessions；
+//   - 连用户主目录都取不到（极少见）时，退回工作目录下的 .szabot/sessions，
+//     保证程序仍能启动而不是直接失败。
+func sessionDir() string {
+	if dir := os.Getenv("SZABOT_SESSION_DIR"); dir != "" {
+		return dir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(".szabot", "sessions")
+	}
+	return filepath.Join(home, ".szabot", "sessions")
 }
 
 // buildProvider 根据环境变量决定用哪个 Provider。
