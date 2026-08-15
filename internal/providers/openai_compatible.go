@@ -53,6 +53,11 @@ type openAIChatMessage struct {
 	Content    *string          `json:"content"`
 	ToolCalls  []openAIToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string           `json:"tool_call_id,omitempty"`
+	// ReasoningContent 是推理型模型（如 DeepSeek-R1）在 content 之外单独返回的
+	// 思考过程。部分兼容实现用 reasoning 字段，两个都收，取非空者。
+	// 仅用于解析响应；请求侧不回传推理内容，因此始终省略序列化。
+	ReasoningContent string `json:"reasoning_content,omitempty"`
+	Reasoning        string `json:"reasoning,omitempty"`
 }
 
 type openAIToolCall struct {
@@ -211,6 +216,10 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 	if choice.Message.Content != nil {
 		content = *choice.Message.Content
 	}
+	reasoning := choice.Message.ReasoningContent
+	if reasoning == "" {
+		reasoning = choice.Message.Reasoning
+	}
 	toolCalls := make([]ToolCall, 0, len(choice.Message.ToolCalls))
 	for _, call := range choice.Message.ToolCalls {
 		if call.ID == "" {
@@ -228,6 +237,7 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 
 	return ChatResponse{
 		Content:      content,
+		Reasoning:    reasoning,
 		ToolCalls:    toolCalls,
 		FinishReason: choice.FinishReason,
 	}, nil

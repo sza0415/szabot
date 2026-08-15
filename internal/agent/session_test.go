@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -146,5 +147,67 @@ func TestLoopSessionsAreIsolated(t *testing.T) {
 	second := provider.requests[1].Messages
 	if len(second) != 1 || second[0].Content != "b-first" {
 		t.Fatalf("session B request = %#v, want only [b-first]", second)
+	}
+}
+
+// TestLoopPersistsReasoningAndToolCalls 验证：一轮涉及工具调用的对话结束后，
+// session 里不再只剩纯文本，而是完整落盘了 user、带推理+tool_calls 的
+// assistant、tool 结果、以及最终 assistant 正文。这正是本次修复的目标。
+func TestLoopPersistsReasoningAndToolCalls(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewSessionStore(dir)
+	if err != nil {
+		t.Fatalf("NewSessionStore() error = %v", err)
+	}
+	registry := tools.NewRegistry()
+	if err := registry.Register(echoTool{}); err != nil {
+		t.Fatal(err)
+	}
+	provider := &scriptedProvider{responses: []providers.ChatResponse{
+		{
+			Reasoning: "需要先调用 echo",
+			ToolCalls: []providers.ToolCall{{
+				ID:        "call_1",
+				Name:      "echo_tool",
+				Arguments: json.RawMessage(`{"value":"hello"}`),
+			}},
+		},
+		{Content: "done", Reasoning: "总结完成"},
+	}}
+	runner := &Runner{Provider: provider, Model: "test", Tools: registry}
+	loop := &Loop{Bus: bus.New(16), Runner: runner, Store: store}
+
+	loop.handle(context.Background(), bus.InboundMessage{
+		SessionID: "sess", ChannelID: "cli", Text: "use tool",
+	})
+
+	// 重新从磁盘读取，确认完整轨迹真的落盘了。
+	reopened, err := NewSessionStore(dir)
+	if err != nil {
+		t.Fatalf("reopen error = %v", err)
+	}
+	got, err := reopened.Load("sess")
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// 期望：user → assistant(推理+tool_calls) → tool 结果 → assistant(最终)。
+	if len(got) != 4 {
+		t.Fatalf("persisted messages = %d, want 4: %#v", len(got), got)
+	}
+	if got[0].Role != providers.RoleUser || got[0].Content != "use tool" {
+		t.Fatalf("got[0] = %#v, want user", got[0])
+	}
+	if got[1].Role != providers.RoleAssistant || got[1].Reasoning != "需要先调用 echo" ||
+		len(got[1].ToolCalls) != 1 || got[1].ToolCalls[0].ID != "call_1" {
+		t.Fatalf("got[1] = %#v, want assistant with reasoning + tool_calls", got[1])
+	}
+	if got[2].Role != providers.RoleTool || got[2].ToolCallID != "call_1" ||
+		got[2].Content != "tool result: hello" {
+		t.Fatalf("got[2] = %#v, want tool result", got[2])
+	}
+	if got[3].Role != providers.RoleAssistant || got[3].Content != "done" ||
+		got[3].Reasoning != "总结完成" {
+		t.Fatalf("got[3] = %#v, want final assistant", got[3])
 	}
 }

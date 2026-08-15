@@ -157,3 +157,74 @@ func TestRunStreamFallbackWhenNotStreaming(t *testing.T) {
 		t.Fatalf("answer=%q streamed=%q, want both plain", answer, got)
 	}
 }
+
+// TestRunCollectCapturesReasoningAndToolMessages 是本次改动的核心测试：
+// RunCollect 必须把推理过程、工具调用、工具结果都收进 RunResult.Messages，
+// 并通过 StreamSink 把各类事件实时汇报出去，而不再只剩最终正文。
+func TestRunCollectCapturesReasoningAndToolMessages(t *testing.T) {
+	registry := tools.NewRegistry()
+	if err := registry.Register(echoTool{}); err != nil {
+		t.Fatal(err)
+	}
+	provider := &scriptedProvider{responses: []providers.ChatResponse{
+		{
+			Reasoning: "先想想需要调用工具",
+			ToolCalls: []providers.ToolCall{{
+				ID:        "call_1",
+				Name:      "echo_tool",
+				Arguments: json.RawMessage(`{"value":"hello"}`),
+			}},
+		},
+		{Content: "final answer", Reasoning: "拿到结果后总结"},
+	}}
+	runner := &Runner{Provider: provider, Model: "test", Tools: registry}
+
+	var (
+		reasoning   string
+		toolCalls   []string
+		toolResults []string
+	)
+	result, err := runner.RunCollect(context.Background(),
+		[]providers.Message{{Role: providers.RoleUser, Content: "use the tool"}},
+		StreamSink{
+			OnReasoningDelta: func(s string) { reasoning += s },
+			OnToolCall:       func(c providers.ToolCall) { toolCalls = append(toolCalls, c.Name) },
+			OnToolResult:     func(_ providers.ToolCall, r string) { toolResults = append(toolResults, r) },
+		})
+	if err != nil {
+		t.Fatalf("RunCollect() error = %v", err)
+	}
+
+	if result.Answer != "final answer" {
+		t.Fatalf("answer = %q, want final answer", result.Answer)
+	}
+
+	// 事件回调：两轮的推理都应汇报，工具调用/结果各一次。
+	if reasoning != "先想想需要调用工具拿到结果后总结" {
+		t.Fatalf("reasoning stream = %q", reasoning)
+	}
+	if len(toolCalls) != 1 || toolCalls[0] != "echo_tool" {
+		t.Fatalf("tool calls = %#v, want [echo_tool]", toolCalls)
+	}
+	if len(toolResults) != 1 || toolResults[0] != "tool result: hello" {
+		t.Fatalf("tool results = %#v", toolResults)
+	}
+
+	// 完整消息序列：assistant(带推理+tool_calls) → tool 结果 → assistant(最终答案)。
+	if len(result.Messages) != 3 {
+		t.Fatalf("result messages = %d, want 3: %#v", len(result.Messages), result.Messages)
+	}
+	first := result.Messages[0]
+	if first.Role != providers.RoleAssistant || first.Reasoning != "先想想需要调用工具" ||
+		len(first.ToolCalls) != 1 || first.ToolCalls[0].ID != "call_1" {
+		t.Fatalf("messages[0] = %#v", first)
+	}
+	second := result.Messages[1]
+	if second.Role != providers.RoleTool || second.ToolCallID != "call_1" || second.Content != "tool result: hello" {
+		t.Fatalf("messages[1] = %#v", second)
+	}
+	third := result.Messages[2]
+	if third.Role != providers.RoleAssistant || third.Content != "final answer" || third.Reasoning != "拿到结果后总结" {
+		t.Fatalf("messages[2] = %#v", third)
+	}
+}
