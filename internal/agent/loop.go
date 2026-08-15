@@ -21,6 +21,10 @@ import (
 type Loop struct {
 	Bus    *bus.MessageBus
 	Runner *Runner
+	// SystemPrompt 是一段固定的系统提示，作为每轮对话的首条 system 消息。
+	// 技能系统的 L1 摘要（以及 always 技能正文）就拼在这里注入 —— 它在进程
+	// 启动时构建一次、全程不变，从而对 KV Cache 友好（动态内容只追加在末尾）。
+	SystemPrompt string
 }
 
 // Start 起一个 goroutine 持续消费入站消息。
@@ -48,9 +52,19 @@ func (l *Loop) handle(ctx context.Context, in bus.InboundMessage) {
 	// 后面接 SessionStore 之后，这里会变成：
 	//   history := store.Load(in.SessionID)
 	//   history = append(history, userMsg)
-	messages := []providers.Message{
-		{Role: providers.RoleUser, Content: in.Text},
+	//
+	// system prompt 恒定放在最前（若配置了的话），技能 L1 摘要即在其中。
+	messages := make([]providers.Message, 0, 2)
+	if l.SystemPrompt != "" {
+		messages = append(messages, providers.Message{
+			Role:    providers.RoleSystem,
+			Content: l.SystemPrompt,
+		})
 	}
+	messages = append(messages, providers.Message{
+		Role:    providers.RoleUser,
+		Content: in.Text,
+	})
 
 	reply, err := l.Runner.Run(ctx, messages)
 	if err != nil {

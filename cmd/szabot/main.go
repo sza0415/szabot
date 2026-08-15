@@ -16,12 +16,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/ziangsun/szabot/internal/agent"
 	"github.com/ziangsun/szabot/internal/bus"
 	"github.com/ziangsun/szabot/internal/channels"
 	"github.com/ziangsun/szabot/internal/providers"
+	"github.com/ziangsun/szabot/internal/skills"
 	"github.com/ziangsun/szabot/internal/tools"
 )
 
@@ -50,8 +52,13 @@ func main() {
 		Tools:    registry,
 	}
 
+	// 技能系统：扫描 workspace/skills 生成 L1 摘要，拼进 system prompt。
+	// agent 触发某个技能时，用现成的 read_file 读摘要里给出的路径即可（L2），
+	// 无需专门的 skill 工具。
+	systemPrompt := buildSystemPrompt(workspace)
+
 	// 3. AgentLoop：从 bus 入站读消息 → 调 Runner → 推回 bus 出站。
-	loop := &agent.Loop{Bus: b, Runner: runner}
+	loop := &agent.Loop{Bus: b, Runner: runner, SystemPrompt: systemPrompt}
 	loop.Start(ctx)
 
 	// 4. CLIChannel：stdin → bus 入站；bus 出站 → stdout。
@@ -67,6 +74,40 @@ func main() {
 	// 5. 等退出信号。
 	<-ctx.Done()
 	fmt.Println("\nszabot stopped.")
+}
+
+// buildSystemPrompt 组装系统提示：基础说明 + 技能系统的 L1 摘要。
+//
+// 三层渐进式披露里，这里只负责 L1（元数据）与 always 技能正文的注入：
+//   - L1 摘要：列出 name / description / 相对路径，量级极小、固定不变；
+//   - always 技能正文：少数需要常驻的技能，直接展开在 system prompt 里；
+//   - 普通技能的正文（L2）与子资源（L3）都由 agent 后续用 read_file 按需读取。
+//
+// 之所以固定拼在 system prompt 且启动后不变，是为了命中 KV Cache：
+// 动态内容只应追加在对话末尾，绝不插进前缀破坏缓存。
+func buildSystemPrompt(workspace string) string {
+	loader := skills.NewLoader(workspace)
+
+	var b strings.Builder
+	b.WriteString("You are szabot, a helpful AI assistant with local tools.\n")
+
+	if bodies := loader.AlwaysBodies(); bodies != "" {
+		b.WriteString("\n# Active Skills\n\n")
+		b.WriteString(bodies)
+		b.WriteString("\n")
+	}
+
+	if summary := loader.Summary(); summary != "" {
+		b.WriteString("\n# Skills\n\n")
+		b.WriteString("The following skills extend your capabilities. ")
+		b.WriteString("To use a skill, read its SKILL.md file (the path in backticks) with the read_file tool, ")
+		b.WriteString("then follow its instructions. ")
+		b.WriteString("Skills marked (unavailable: ...) need their dependencies installed first.\n\n")
+		b.WriteString(summary)
+		b.WriteString("\n")
+	}
+
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // registerTools 把工作区内的本地工具装进 registry。

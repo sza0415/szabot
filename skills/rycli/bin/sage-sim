@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# sage-sim —— rycli sage 的离线模拟器（zero-dependency）
+#
+# 目的：在 szabot 环境里没有真实 rycli / 联网服务的情况下，
+# 用一个纯 bash 脚本模拟 `rycli sage ask` 的输入输出契约，
+# 让 rycli skill 描述的交互流程（专家路由 / thread-id 多轮 / <text> 摘要）
+# 能真实跑通、可被 bash 工具直接执行。
+#
+# 用法：
+#   sage-sim ask --agent-id=<id> [--thread-id=<tid>] --text=<text>
+#
+# 契约（与真实 rycli 对齐）：
+#   - 输出用 <thread_id>...</thread_id> 包裹本轮会话 id，供后续 --thread-id 复用；
+#   - 输出用 <text>...</text> 包裹专家正文，供上层提取并做 200 字摘要。
+
+set -euo pipefail
+
+sub="${1:-}"
+shift || true
+if [[ "$sub" != "ask" ]]; then
+  echo "sage-sim: 仅支持子命令 'ask'（收到: '${sub}'）" >&2
+  exit 2
+fi
+
+agent_id=""
+thread_id=""
+text=""
+
+# 同时兼容 --k=v 与 --k v 两种传参写法。
+while [[ $# -gt 0 ]]; do
+  arg="$1"
+  case "$arg" in
+    --agent-id=*)  agent_id="${arg#*=}" ;;
+    --thread-id=*) thread_id="${arg#*=}" ;;
+    --text=*)      text="${arg#*=}" ;;
+    --agent-id)    shift; agent_id="${1:-}" ;;
+    --thread-id)   shift; thread_id="${1:-}" ;;
+    --text)        shift; text="${1:-}" ;;
+    *) echo "sage-sim: 未知参数 '$arg'" >&2; exit 2 ;;
+  esac
+  shift || true
+done
+
+if [[ -z "$agent_id" ]]; then
+  echo "sage-sim: 缺少必填参数 --agent-id" >&2
+  exit 2
+fi
+if [[ -z "$text" ]]; then
+  echo "sage-sim: 缺少必填参数 --text" >&2
+  exit 2
+fi
+
+# 首轮无 thread-id 则生成一个稳定可读的会话 id；多轮复用传入值。
+if [[ -z "$thread_id" ]]; then
+  thread_id="th-$(date +%s)-$RANDOM"
+fi
+
+# 按 agent-id 给一段"像样"的专家正文，纯本地生成、不联网。
+case "$agent_id" in
+  market_expert_agent)      persona="营销专家" ;;
+  variety_expert_agent)     persona="综艺模式专家" ;;
+  variety_marketing_agent)  persona="综艺营销专家" ;;
+  novel_agent)              persona="小说专家" ;;
+  script_expert_agent)      persona="剧本专家" ;;
+  *)                        persona="通用专家(${agent_id})" ;;
+esac
+
+cat <<EOF
+<thread_id>${thread_id}</thread_id>
+<text>
+【${persona}·模拟应答】
+针对输入「${text}」，本次给出结构化分析要点：
+1. 核心结论：围绕用户诉求给出方向性判断，明确可落地的第一优先级动作。
+2. 关键依据：列出支撑该判断的 2-3 条数据/逻辑线索（此处为模拟数据）。
+3. 执行建议：拆解为短期（1 周内）与中期（1 月内）两档具体动作。
+4. 风险提示：指出 1 条最需要规避的执行风险及其兜底方案。
+（说明：以上内容由 sage-sim 离线模拟生成，用于在无真实 rycli 服务时演练完整交互链路。）
+</text>
+EOF
