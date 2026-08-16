@@ -166,8 +166,44 @@ func TestDispatchStreamsToSSE(t *testing.T) {
 	if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &payload); err != nil {
 		t.Fatalf("bad json payload %q: %v", line, err)
 	}
-	if payload["text"] != "hello-sse" || payload["delta"] != true {
+	if payload["text"] != "hello-sse" || payload["kind"] != "answer" || payload["delta"] != true {
 		t.Fatalf("unexpected payload: %v", payload)
+	}
+}
+
+func TestDispatchStreamsToolKindsToSSE(t *testing.T) {
+	b := bus.New(16)
+	w := newTestWeb(b)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go w.dispatch(ctx)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/stream", w.handleStream)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL+"/api/stream?session=S", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("stream request error: %v", err)
+	}
+	defer resp.Body.Close()
+	reader := bufio.NewReader(resp.Body)
+	waitForLine(t, reader, "event: ready")
+
+	_ = b.PublishOutbound(ctx, bus.OutboundMessage{
+		ChannelID: "web", SessionID: "S", Kind: bus.KindToolCall,
+		Text: "read_file(README.md)", Delta: true,
+	})
+	line := waitForLine(t, reader, "read_file(README.md)")
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &payload); err != nil {
+		t.Fatalf("bad json payload %q: %v", line, err)
+	}
+	if payload["kind"] != "tool_call" || payload["delta"] != true {
+		t.Fatalf("unexpected tool payload: %v", payload)
 	}
 }
 

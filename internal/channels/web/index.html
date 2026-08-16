@@ -71,6 +71,19 @@
     border: 1px solid var(--border);
     border-bottom-left-radius: 4px;
   }
+  .msg.reasoning .bubble {
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .msg.tool .bubble {
+    color: #a9d7e8;
+    background: #17252c;
+    border-color: #244653;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.5px;
+  }
   .role {
     font-size: 11px; color: var(--muted);
     margin: 0 4px 4px; align-self: flex-end;
@@ -155,7 +168,9 @@
     localStorage.setItem("szabot_session", session);
   }
 
-  let currentBotBubble = null; // 本轮正在接收流式增量的气泡
+  let currentAnswerBubble = null;
+  let currentReasoningBubble = null;
+  let lastTypedKind = null;
   let waiting = false;         // 是否在等待回复（禁用发送）
 
   function setStatus(text, online) {
@@ -167,12 +182,12 @@
     messages.scrollTop = messages.scrollHeight;
   }
 
-  function addMessage(role, text) {
+  function addMessage(role, text, label) {
     const msg = document.createElement("div");
     msg.className = "msg " + role;
     const roleEl = document.createElement("div");
     roleEl.className = "role";
-    roleEl.textContent = role === "user" ? "你" : "szabot";
+    roleEl.textContent = label || (role === "user" ? "你" : "szabot");
     const bubble = document.createElement("div");
     bubble.className = "bubble";
     bubble.textContent = text;
@@ -185,6 +200,48 @@
     list.appendChild(msg);
     scrollToBottom();
     return bubble;
+  }
+
+  function appendTyped(kind, text) {
+    if (kind === "tool_result" && !text) text = "（空结果）";
+    if (!text) return;
+
+    if (kind === "reasoning") {
+      if (lastTypedKind !== kind) currentReasoningBubble = null;
+      if (!currentReasoningBubble) {
+        currentReasoningBubble = addMessage("reasoning", "", "思考");
+        currentReasoningBubble.classList.add("pending");
+      }
+      currentReasoningBubble.textContent += text;
+      lastTypedKind = kind;
+      return;
+    }
+
+    if (kind === "tool_call" || kind === "tool_result") {
+      const label = kind === "tool_call" ? "工具调用" : "工具结果";
+      const bubble = addMessage("tool", text, label);
+      bubble.classList.add("tool-event");
+      lastTypedKind = kind;
+      return;
+    }
+
+    if (lastTypedKind !== kind) currentAnswerBubble = null;
+    if (!currentAnswerBubble) {
+      currentAnswerBubble = addMessage("bot", "");
+      currentAnswerBubble.classList.add("pending");
+    }
+    currentAnswerBubble.textContent += text;
+    lastTypedKind = kind;
+  }
+
+  function finishResponse() {
+    if (currentReasoningBubble) currentReasoningBubble.classList.remove("pending");
+    if (currentAnswerBubble) currentAnswerBubble.classList.remove("pending");
+    currentReasoningBubble = null;
+    currentAnswerBubble = null;
+    lastTypedKind = null;
+    waiting = false;
+    sendBtn.disabled = false;
   }
 
   // 建立 SSE 连接，接收流式回复。
@@ -200,26 +257,15 @@
       try { data = JSON.parse(e.data); } catch (_) { return; }
 
       if (data.delta && data.text) {
-        // 流式增量：追加到当前气泡。
-        if (!currentBotBubble) {
-          currentBotBubble = addMessage("bot", "");
-          currentBotBubble.classList.add("pending");
-        }
-        currentBotBubble.textContent += data.text;
+        // 按 SSE 携带的 kind 分区渲染，避免推理/工具内容混进正文。
+        appendTyped(data.kind || "answer", data.text);
         scrollToBottom();
       } else if (data.done) {
-        // 收尾：结束本轮，解锁输入。
-        if (currentBotBubble) currentBotBubble.classList.remove("pending");
-        currentBotBubble = null;
-        waiting = false;
-        sendBtn.disabled = false;
+        finishResponse();
       } else if (data.text) {
         // 非流式整段回复（向后兼容）。
-        if (currentBotBubble) {
-          currentBotBubble.textContent += data.text;
-        } else {
-          addMessage("bot", data.text);
-        }
+        appendTyped(data.kind || "answer", data.text);
+        scrollToBottom();
       }
     };
 

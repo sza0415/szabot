@@ -25,6 +25,7 @@ type SandboxConfig struct {
 	Memory       string        // docker --memory value, e.g. "512m"
 	CPUs         string        // docker --cpus value, e.g. "1.0"
 	PidsLimit    int           // docker --pids-limit, guards against fork bombs
+	TmpSize      string        // /tmp tmpfs size, e.g. "512m"
 	Network      bool          // when false, run with --network=none
 	DockerBinary string        // docker executable, defaults to "docker"
 }
@@ -35,6 +36,7 @@ const (
 	defaultSandboxMemory    = "512m"
 	defaultSandboxCPUs      = "1.0"
 	defaultSandboxPids      = 256
+	defaultSandboxTmpSize   = "64m"
 )
 
 // withDefaults returns a copy of cfg with zero fields filled from safe defaults.
@@ -53,6 +55,9 @@ func (c SandboxConfig) withDefaults() SandboxConfig {
 	}
 	if c.PidsLimit <= 0 {
 		c.PidsLimit = defaultSandboxPids
+	}
+	if strings.TrimSpace(c.TmpSize) == "" {
+		c.TmpSize = defaultSandboxTmpSize
 	}
 	if strings.TrimSpace(c.DockerBinary) == "" {
 		c.DockerBinary = "docker"
@@ -148,7 +153,7 @@ func (s *Sandbox) dockerArgs(argv []string) []string {
 		"-w", "/work",
 		"--read-only",
 		// Writable scratch space that vanishes with the container.
-		"--tmpfs", "/tmp:rw,size=64m",
+		"--tmpfs", "/tmp:rw,size=" + s.cfg.TmpSize,
 	}
 	if !s.cfg.Network {
 		args = append(args, "--network", "none")

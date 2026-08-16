@@ -185,6 +185,7 @@ func registerTools(registry *tools.Registry, workspace string) {
 //   - export SZABOT_SANDBOX_NETWORK=1    额外允许容器联网（默认断网）
 //   - export SZABOT_PYTHON_IMAGE=...     python 镜像，默认 python:3.12-slim
 //   - export SZABOT_BASH_IMAGE=...       bash 镜像，默认 debian:stable-slim
+//   - export SZABOT_SANDBOX_TMP_SIZE=... /tmp 大小，默认 64m
 func registerSandboxTools(registry *tools.Registry, workspace string) {
 	if os.Getenv("SZABOT_SANDBOX") == "" {
 		return
@@ -193,10 +194,12 @@ func registerSandboxTools(registry *tools.Registry, workspace string) {
 	network := os.Getenv("SZABOT_SANDBOX_NETWORK") != ""
 	pythonImage := envOr("SZABOT_PYTHON_IMAGE", "python:3.12-slim")
 	bashImage := envOr("SZABOT_BASH_IMAGE", "debian:stable-slim")
+	tmpSize := envOr("SZABOT_SANDBOX_TMP_SIZE", "64m")
 
 	bashSandbox, err := tools.NewSandbox(tools.SandboxConfig{
 		Image:     bashImage,
 		Workspace: workspace,
+		TmpSize:   tmpSize,
 		Network:   network,
 	})
 	if err != nil {
@@ -206,6 +209,7 @@ func registerSandboxTools(registry *tools.Registry, workspace string) {
 	pythonSandbox, err := tools.NewSandbox(tools.SandboxConfig{
 		Image:     pythonImage,
 		Workspace: workspace,
+		TmpSize:   tmpSize,
 		Network:   network,
 	})
 	if err != nil {
@@ -229,7 +233,7 @@ func registerSandboxTools(registry *tools.Registry, workspace string) {
 			fmt.Fprintf(os.Stderr, "warn: register %s tool: %v\n", name, err)
 		}
 	}
-	fmt.Printf("sandbox tools enabled: bash(%s) python(%s) network=%v\n", bashImage, pythonImage, network)
+	fmt.Printf("sandbox tools enabled: bash(%s) python(%s) tmp=%s network=%v\n", bashImage, pythonImage, tmpSize, network)
 }
 
 func envOr(key, fallback string) string {

@@ -1,6 +1,6 @@
 # szabot
 
-一个用 Go 实现的 agent 框架，架构借鉴 [nanobot](https://github.com/...)。
+一个用 Go 实现的 agent 框架
 
 ## 目录结构
 
@@ -153,9 +153,37 @@ export SZABOT_SANDBOX=1              # 启用 bash + python
 # export SZABOT_SANDBOX_NETWORK=1   # 允许容器联网（默认断网）
 # export SZABOT_PYTHON_IMAGE=python:3.12-slim
 # export SZABOT_BASH_IMAGE=debian:stable-slim
+# export SZABOT_SANDBOX_TMP_SIZE=512m # 容器 /tmp 大小，默认 64m
 ```
 
 未安装 Docker 时会自动跳过 bash/python，文件类工具照常可用。
+
+> 注意：`bash` 工具中的命令实际运行在 `SZABOT_BASH_IMAGE` 容器内，能否执行
+> `go`、`git`、`make` 等命令取决于该镜像是否安装了对应工具。默认的
+> `debian:stable-slim` 只提供基础 shell 环境，不包含 Go。需要运行 Go 项目时，
+> 可以预先拉取带 Go 工具链的镜像，并将它配置为 bash 镜像：
+>
+> ```bash
+> docker pull golang:1.22
+> export SZABOT_SANDBOX=1
+> export SZABOT_BASH_IMAGE=golang:1.22
+> ./szabot
+> ```
+>
+> sandbox 默认关闭网络，因此不能依赖运行时 `apt install`、下载 Go 或拉取依赖。
+> 镜像、Go 模块依赖和其他命令行工具都应在启动 szabot 前准备好。若没有 Go 镜像，
+> `go version`、`go test ./...`、`go build ./...` 等命令会在容器内失败；这不表示
+> szabot 的宿主机必须安装 Go。启动日志中的 `sandbox tools enabled` 表示两个
+> sandbox 工具已经注册，不表示 bash 镜像包含所有开发工具。
+
+> 如果命令在容器 `/tmp` 中产生较大的临时文件，默认的 64M 可能不足。可以在启动前
+> 设置 `SZABOT_SANDBOX_TMP_SIZE`，例如 `512m` 或 `1g`。该设置同时应用于 bash 和
+> python sandbox，且每次执行都会创建新的临时文件系统：
+>
+> ```bash
+> export SZABOT_SANDBOX_TMP_SIZE=512m
+> ./szabot
+> ```
 
 ### 安装 Docker（macOS）
 
@@ -178,6 +206,8 @@ docker version
 # 4.（可选）预拉镜像，避免首次调用时现拉很慢
 docker pull debian:stable-slim
 docker pull python:3.12-slim
+# 如果需要在 bash sandbox 中编译 Go 项目：
+# docker pull golang:1.22
 ```
 
 > 若第 3 步提示 `command not found`，新开一个终端窗口让 PATH 生效即可。

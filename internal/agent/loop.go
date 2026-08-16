@@ -84,7 +84,8 @@ func (l *Loop) handle(ctx context.Context, in bus.InboundMessage) {
 	// 出站分片的统一发送器：按 Kind 区分正文 / 推理 / 工具调用 / 工具结果。
 	// 都以 Delta=true 的分片形式流过 bus，channel 可据 Kind 分区渲染。
 	emit := func(kind bus.OutboundKind, text string) {
-		if text == "" {
+		// 工具结果即使为空也要发出，否则前端只能看到调用，看不到执行完成。
+		if text == "" && kind != bus.KindToolResult {
 			return
 		}
 		out := bus.OutboundMessage{
