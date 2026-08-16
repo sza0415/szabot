@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Skill Review</title>
+  <style>
+    :root {
+      --ink: #16283c;
+      --muted: #65788c;
+      --line: #dce6ed;
+      --paper: #f4f7f8;
+      --white: #ffffff;
+      --blue: #2167c7;
+      --blue-soft: #eaf2fc;
+      --teal: #138f9e;
+      --teal-soft: #e5f5f4;
+      --orange: #c76f1a;
+      --orange-soft: #fff1df;
+      --red: #b54444;
+      --green: #25815f;
+      --shadow: 0 8px 24px rgba(28, 55, 76, .07);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+    button { font: inherit; }
+    .shell { max-width: 1440px; margin: 0 auto; padding: 28px 32px 48px; }
+    .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 24px; }
+    .eyebrow { color: var(--blue); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { margin: 5px 0 5px; font-size: clamp(26px, 3vw, 40px); letter-spacing: 0; line-height: 1.12; }
+    .subtitle { margin: 0; color: var(--muted); }
+    .version { border-left: 3px solid var(--teal); padding: 8px 0 8px 14px; color: var(--muted); min-width: 210px; }
+    .version strong { display: block; color: var(--ink); font-size: 15px; }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-bottom: 24px; }
+    .metric { background: var(--white); border: 1px solid var(--line); border-top: 3px solid var(--blue); padding: 16px 18px; box-shadow: var(--shadow); }
+    .metric:nth-child(2), .metric:nth-child(5) { border-top-color: var(--teal); }
+    .metric:nth-child(3) { border-top-color: var(--orange); }
+    .metric-label { color: var(--muted); font-size: 12px; }
+    .metric-value { margin-top: 4px; font-size: 25px; font-weight: 700; }
+    .workspace { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 18px; align-items: start; }
+    .panel { background: var(--white); border: 1px solid var(--line); box-shadow: var(--shadow); }
+    .sidebar { padding: 0 0 8px; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .panel-head h2 { margin: 0; font-size: 15px; }
+    .count { color: var(--muted); font-size: 12px; }
+    .stage-nav { padding: 8px; border-bottom: 1px solid var(--line); }
+    .stage-item { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 10px; border: 1px solid transparent; background: transparent; color: var(--ink); text-align: left; }
+    .stage-item.planned { color: #8b9aa7; }
+    .stage-index { color: var(--blue); font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .stage-item.planned .stage-index { color: #aab7c1; }
+    .stage-title { display: block; font-weight: 700; font-size: 13px; }
+    .stage-description { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .stage-state { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .stage-item.active { background: var(--blue-soft); border-color: #b8d3f3; }
+    .stage-item.active .stage-state { color: var(--blue); font-weight: 700; }
+    .stage-item.planned .stage-state { color: #aab7c1; }
+    .subsection-head { padding: 14px 18px 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .path-list { padding: 8px; }
+    .path-item { width: 100%; display: block; text-align: left; background: transparent; border: 1px solid transparent; padding: 13px 12px; cursor: pointer; color: var(--ink); }
+    .path-item:hover { background: #f5f9fb; }
+    .path-item.active { background: var(--blue-soft); border-color: #b8d3f3; }
+    .path-name { display: block; font-weight: 700; margin-bottom: 4px; }
+    .path-id { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .detail { min-width: 0; }
+    .detail-head { padding: 20px 22px; display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
+    .detail-head h2 { margin: 0 0 3px; font-size: 21px; }
+    .detail-head p { margin: 0; color: var(--muted); }
+    .badge { align-self: flex-start; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .badge.pass { background: #e6f5ee; color: var(--green); }
+    .badge.fail { background: #fce9e8; color: var(--red); }
+    .path-flow { display: flex; gap: 0; overflow-x: auto; padding: 22px; border-bottom: 1px solid var(--line); }
+    .node { flex: 0 0 180px; min-height: 132px; padding: 14px; background: #fbfcfd; border: 1px solid var(--line); position: relative; }
+    .node:not(:last-child) { margin-right: 24px; }
+    .node:not(:last-child)::after { content: "→"; position: absolute; right: -20px; top: 51px; color: var(--blue); font-size: 19px; font-weight: 700; }
+    .node.tool { border-top: 3px solid var(--teal); }
+    .node.decision { border-top: 3px solid var(--blue); }
+    .node.validation { border-top: 3px solid var(--orange); }
+    .node.output { border-top: 3px solid var(--green); }
+    .node-kind { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .node h3 { margin: 6px 0 5px; font-size: 14px; overflow-wrap: anywhere; }
+    .node p { margin: 0; color: var(--muted); font-size: 12px; }
+    .tool { margin-top: 10px; display: inline-block; color: var(--teal); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .lower { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 18px; padding: 18px 22px 22px; }
+    .section-title { margin: 0 0 12px; font-size: 13px; }
+    .case-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 10px 0; }
+    .case-row:last-child { border-bottom: 0; }
+    .case-id { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
+    .case-name { margin-top: 2px; font-weight: 600; }
+    .status { font-weight: 700; font-size: 12px; }
+    .status.pass { color: var(--green); }
+    .status.fail { color: var(--red); }
+    .failure { background: var(--orange-soft); border-left: 3px solid var(--orange); padding: 11px 12px; margin-bottom: 8px; color: #74440f; }
+    .failure code { color: #9c5510; }
+    .empty { color: var(--muted); padding: 16px 0; }
+    .notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+    @media (max-width: 900px) {
+      .shell { padding: 20px 16px 32px; }
+      .topbar { display: block; }
+      .version { margin-top: 18px; }
+      .metrics { grid-template-columns: repeat(2, 1fr); }
+      .workspace { grid-template-columns: 1fr; }
+      .path-list { display: flex; gap: 8px; overflow-x: auto; }
+      .path-item { min-width: 220px; }
+      .lower { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) { .metrics { grid-template-columns: 1fr 1fr; } .metric { padding: 12px; } .metric-value { font-size: 21px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Skill Review / Path Diagnostics</div>
+        <h1>评审路径总览</h1>
+        <p class="subtitle">从总分下沉到路径、节点、工具调用和失败原因。</p>
+      </div>
+      <div class="version"><span>当前评审版本</span><strong id="version">加载中…</strong></div>
+    </header>
+    <section class="metrics" id="metrics"></section>
+    <section class="workspace">
+      <aside class="panel sidebar">
+        <div class="panel-head"><h2>评审流程</h2><span class="count">Skill Review</span></div>
+        <nav class="stage-nav" id="stages" aria-label="Skill 评审流程"></nav>
+        <div class="subsection-head">当前模块 · Path</div>
+        <div class="panel-head"><h2>Path 清单</h2><span class="count" id="path-count"></span></div>
+        <div class="path-list" id="paths"></div>
+      </aside>
+      <section class="panel detail">
+        <div class="detail-head"><div><h2 id="detail-title">选择一条 Path</h2><p id="detail-subtitle">查看完整节点链路和对应测试结果</p></div><span id="detail-status" class="badge pass">待选择</span></div>
+        <div class="path-flow" id="flow"><div class="empty">暂无 Path 定义</div></div>
+        <div class="lower">
+          <div><h3 class="section-title">相关测试用例</h3><div id="cases"></div></div>
+          <div><h3 class="section-title">失败与注意事项</h3><div id="issues"></div></div>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script>
+    const state = { data: null, selected: null };
+    const $ = (id) => document.getElementById(id);
+    const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+    const pct = (value) => Number(value) < 0 ? "—" : `${(Number(value || 0) * 100).toFixed(1)}%`;
+    const kindLabel = (kind) => ({input:"输入", validation:"校验", decision:"判断", tool:"工具", output:"输出", fallback:"兜底"}[kind] || kind || "节点");
+    function renderMetrics(report) {
+      const items = [["用例通过", `${report.metrics.passed_cases}/${report.metrics.total_cases}`], ["Skill 命中率", pct(report.metrics.skill_selection_rate)], ["Path 覆盖率", pct(report.metrics.path_coverage)], ["Node 覆盖率", pct(report.metrics.node_coverage)], ["路径匹配率", pct(report.metrics.path_match_rate)], ["链路通过率", pct(report.metrics.chain_pass_rate)], ["注意事项通过率", pct(report.metrics.notice_pass_rate)], ["输出通过率", pct(report.metrics.output_pass_rate)]];
+      $("metrics").innerHTML = items.map(([label, value]) => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value">${esc(value)}</div></div>`).join("");
+    }
+    function renderStages(modules) {
+      $("stages").innerHTML = (modules || []).map((module) => `<div class="stage-item ${esc(module.status)}"><span class="stage-index">${String(module.order).padStart(2, "0")}</span><span><span class="stage-title">${esc(module.name)}</span><span class="stage-description">${esc(module.description)}</span></span><span class="stage-state">${module.status === "active" ? "当前" : "规划"}</span></div>`).join("");
+    }
+    function findResult(pathId) {
+      return state.data.report.results.filter((r) => r.expected.path_id === pathId);
+    }
+    function renderPaths() {
+      const paths = state.data.paths || [];
+      $("path-count").textContent = `${paths.length} 条路径`;
+      $("paths").innerHTML = paths.length ? paths.map((path) => `<button class="path-item ${path.path_id === state.selected ? "active" : ""}" data-path="${esc(path.path_id)}"><span class="path-name">${esc(path.name || path.path_id)}</span><span class="path-id">${esc(path.path_id)}</span></button>`).join("") : `<div class="empty">没有加载 Path 定义</div>`;
+      document.querySelectorAll("[data-path]").forEach((button) => button.addEventListener("click", () => { state.selected = button.dataset.path; renderPaths(); renderDetail(); }));
+    }
+    function renderDetail() {
+      const path = (state.data.paths || []).find((item) => item.path_id === state.selected);
+      if (!path) return;
+      const results = findResult(path.path_id);
+      const failed = results.some((r) => !r.passed);
+      $("detail-title").textContent = path.name || path.path_id;
+      $("detail-subtitle").textContent = `${path.path_id} · ${path.entry_conditions?.join(" / ") || "无入口条件"}`;
+      $("detail-status").textContent = failed ? "存在失败" : "路径正常";
+      $("detail-status").className = `badge ${failed ? "fail" : "pass"}`;
+      $("flow").innerHTML = (path.nodes || []).map((node) => `<article class="node ${esc(node.kind)}"><div class="node-kind">${esc(kindLabel(node.kind))}</div><h3>${esc(node.id)}</h3><p>${esc(node.condition || node.expected_branch || "必经节点")}</p>${node.tool ? `<span class="tool">Tool · ${esc(node.tool)}</span>` : ""}</article>`).join("") || `<div class="empty">没有节点定义</div>`;
+      $("cases").innerHTML = results.length ? results.map((result) => `<div class="case-row"><div><div class="case-id">${esc(result.case_id)}</div><div class="case-name">${esc(result.name || "未命名用例")}</div></div><span class="status ${result.passed ? "pass" : "fail"}">${result.passed ? "通过" : "失败"}</span></div>`).join("") : `<div class="empty">没有关联测试用例</div>`;
+      const notes = (path.nodes || []).flatMap((node) => (node.notes || []).map((note) => `${node.id}：${note}`));
+      const failures = results.flatMap((result) => (result.failures || []).map((failure) => `<div class="failure"><code>${esc(failure.code)}</code> · ${esc(failure.message)}${failure.failed_node ? ` · 节点：${esc(failure.failed_node)}` : ""}</div>`));
+      $("issues").innerHTML = failures.join("") + (notes.length ? `<ul class="notes">${notes.map((note) => `<li>${esc(note)}</li>`).join("")}</ul>` : "") || `<div class="empty">暂无失败或注意事项</div>`;
+    }
+    async function boot() {
+      const response = await fetch("/api/data");
+      state.data = await response.json();
+      $("version").textContent = state.data.report.skill_version || "未标记版本";
+      renderStages(state.data.modules);
+      renderMetrics(state.data.report);
+      state.selected = state.data.paths?.[0]?.path_id || null;
+      renderPaths();
+      renderDetail();
+    }
+    boot().catch((error) => { $("version").textContent = "加载失败"; $("paths").innerHTML = `<div class="empty">${esc(error.message)}</div>`; });
+  </script>
+</body>
+</html>
