@@ -1,11 +1,11 @@
-# Sage 对话（模拟版）
+# 内容专家对话（模拟版）
 
 ```bash
-# sage 问答模块（离线模拟器，替代真实 rycli sage ask）
-bash skills/rycli/bin/sage-sim ask [options]
+# 内容问答模块（离线模拟器）
+bash skills/content-expert/bin/content-sim ask [options]
 ```
 
-- **执行查询**：根据用户意图从下表选择子 Agent，调用 `bash skills/rycli/bin/sage-sim ask [options]`。
+- **执行查询**：根据用户意图从下表选择子 Agent，调用 `bash skills/content-expert/bin/content-sim ask [options]`。
   - **多轮对话**：脚本输出中由 `<thread_id>` 和 `</thread_id>` 包裹的是本轮 `thread-id`，
     后续调用通过 `--thread-id=<thread_id>` 传入以维持上下文连续性。
   - **说明**：模拟器为本地即时返回，无需真实的长时间状态轮询；真实环境下才需要 180~300s 的轮询等待。
@@ -24,7 +24,7 @@ bash skills/rycli/bin/sage-sim ask [options]
   - 输出要点摘要，字数严格控制在 **200 字左右**（180-220 字），语言精炼、直白、无废话。
 
 ```bash
-bash skills/rycli/bin/sage-sim ask --agent-id=market_expert_agent [--thread-id=<thread_id>] --text="<text>"
+bash skills/content-expert/bin/content-sim ask --agent-id=market_expert_agent [--thread-id=<thread_id>] --text="<text>"
 ```
 
 ---
@@ -40,7 +40,7 @@ bash skills/rycli/bin/sage-sim ask --agent-id=market_expert_agent [--thread-id=<
   - 输出要点摘要，字数严格控制在 **200 字左右**（180-220 字），语言精炼、直白、无废话。
 
 ```bash
-bash skills/rycli/bin/sage-sim ask --agent-id=variety_expert_agent [--thread-id=<thread_id>] --text="<text>"
+bash skills/content-expert/bin/content-sim ask --agent-id=variety_expert_agent [--thread-id=<thread_id>] --text="<text>"
 ```
 
 ---
@@ -57,7 +57,7 @@ bash skills/rycli/bin/sage-sim ask --agent-id=variety_expert_agent [--thread-id=
   - 输出要点摘要，字数严格控制在 **200 字左右**（180-220 字），语言精炼、直白、无废话。
 
 ```bash
-bash skills/rycli/bin/sage-sim ask --agent-id=variety_marketing_agent [--thread-id=<thread_id>] --text="<text>"
+bash skills/content-expert/bin/content-sim ask --agent-id=variety_marketing_agent [--thread-id=<thread_id>] --text="<text>"
 ```
 
 ---
@@ -73,7 +73,7 @@ bash skills/rycli/bin/sage-sim ask --agent-id=variety_marketing_agent [--thread-
 - **结果处理**：定位 `<text>` 标签内容，输出 **200 字左右**（180-220 字）的精炼摘要。
 
 ```bash
-bash skills/rycli/bin/sage-sim ask --agent-id=novel_agent [--thread-id=<thread_id>] --text="<text>"
+bash skills/content-expert/bin/content-sim ask --agent-id=novel_agent [--thread-id=<thread_id>] --text="<text>"
 ```
 
 ---
@@ -95,5 +95,5 @@ bash skills/rycli/bin/sage-sim ask --agent-id=novel_agent [--thread-id=<thread_i
   - 定位脚本输出中 `<text>` 标签内容，输出 **200 字左右**（180-220 字）的精炼摘要。
 
 ```bash
-bash skills/rycli/bin/sage-sim ask --agent-id=script_expert_agent [--thread-id=<thread_id>] --text="<text>"
+bash skills/content-expert/bin/content-sim ask --agent-id=script_expert_agent [--thread-id=<thread_id>] --text="<text>"
 ```

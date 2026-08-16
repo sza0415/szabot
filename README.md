@@ -231,11 +231,11 @@ sandbox tools enabled: bash(debian:stable-slim) python(python:3.12-slim) network
 L2 正文（`SKILL.md`）与 L3 子资源由 agent 用 `read_file` 按需读取。详见
 `internal/skills/`。
 
-### rycli：影视综专家模式（离线模拟）
+### content-expert：内容分析专家模式（离线模拟）
 
-`skills/rycli/` 模拟"如影 CLI"的专家问答，覆盖营销 / 综艺模式 / 综艺营销 / 小说 / 剧本
-五类专家。底层用 workspace 内自带的纯 bash 脚本 `skills/rycli/bin/sage-sim` 离线模拟
-`rycli sage ask` 的输入输出契约（`<thread_id>` 多轮 + `<text>` 正文），无需真实联网服务。
+`skills/content-expert/` 提供中性的内容分析专家问答模拟，覆盖营销 / 综艺模式 / 综艺营销 /
+小说 / 剧本五类专家。底层用 workspace 内自带的纯 bash 脚本
+`skills/content-expert/bin/content-sim` 离线生成结构化结果，无需真实联网服务。
 
 > ⚠️ 该 skill 的执行路径落在 `bash` 工具上，因此**依赖 Docker 沙盒**（`SZABOT_SANDBOX=1`）。
 > 未开启沙盒时 agent 会读到 skill 却无法执行脚本。请先按上文装好 Docker。

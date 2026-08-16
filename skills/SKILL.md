@@ -4,4 +4,4 @@
 
 | 用户意图关键词                                                     | 技能(skill-name) | 备注                                             |
 | ------------------------------------------------------------------ | ---------------- | ------------------------------------------------ |
-| `@expert:{name}`（营销 market / 模式·综艺 variety / 剧本小说 等） | `rycli`          | 按 expert_name 匹配`--agent-id`，详见其 SKILL.md |
+| `@expert:{name}`（营销 market / 模式·综艺 variety / 剧本小说 等） | `content-expert` | 按 expert_name 匹配`--agent-id`，详见其 SKILL.md |

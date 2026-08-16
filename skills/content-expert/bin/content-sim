@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# sage-sim —— rycli sage 的离线模拟器（zero-dependency）
+# content-sim —— 内容专家模式的离线模拟器（zero-dependency）
 #
-# 目的：在 szabot 环境里没有真实 rycli / 联网服务的情况下，
-# 用一个纯 bash 脚本模拟 `rycli sage ask` 的输入输出契约，
-# 让 rycli skill 描述的交互流程（专家路由 / thread-id 多轮 / <text> 摘要）
+# 目的：在 szabot 环境里不连接外部服务的情况下，
+# 用一个纯 bash 脚本提供稳定的专家问答输入输出契约，
+# 让 content-expert skill 描述的交互流程（专家路由 / thread-id 多轮 / <text> 摘要）
 # 能真实跑通、可被 bash 工具直接执行。
 #
 # 用法：
-#   sage-sim ask --agent-id=<id> [--thread-id=<tid>] --text=<text>
+#   content-sim ask --agent-id=<id> [--thread-id=<tid>] --text=<text>
 #
-# 契约（与真实 rycli 对齐）：
+# 契约：
 #   - 输出用 <thread_id>...</thread_id> 包裹本轮会话 id，供后续 --thread-id 复用；
 #   - 输出用 <text>...</text> 包裹专家正文，供上层提取并做 200 字摘要。
 
@@ -18,7 +18,7 @@ set -euo pipefail
 sub="${1:-}"
 shift || true
 if [[ "$sub" != "ask" ]]; then
-  echo "sage-sim: 仅支持子命令 'ask'（收到: '${sub}'）" >&2
+  echo "content-sim: 仅支持子命令 'ask'（收到: '${sub}'）" >&2
   exit 2
 fi
 
@@ -36,17 +36,17 @@ while [[ $# -gt 0 ]]; do
     --agent-id)    shift; agent_id="${1:-}" ;;
     --thread-id)   shift; thread_id="${1:-}" ;;
     --text)        shift; text="${1:-}" ;;
-    *) echo "sage-sim: 未知参数 '$arg'" >&2; exit 2 ;;
+    *) echo "content-sim: 未知参数 '$arg'" >&2; exit 2 ;;
   esac
   shift || true
 done
 
 if [[ -z "$agent_id" ]]; then
-  echo "sage-sim: 缺少必填参数 --agent-id" >&2
+  echo "content-sim: 缺少必填参数 --agent-id" >&2
   exit 2
 fi
 if [[ -z "$text" ]]; then
-  echo "sage-sim: 缺少必填参数 --text" >&2
+  echo "content-sim: 缺少必填参数 --text" >&2
   exit 2
 fi
 
@@ -74,6 +74,6 @@ cat <<EOF
 2. 关键依据：列出支撑该判断的 2-3 条数据/逻辑线索（此处为模拟数据）。
 3. 执行建议：拆解为短期（1 周内）与中期（1 月内）两档具体动作。
 4. 风险提示：指出 1 条最需要规避的执行风险及其兜底方案。
-（说明：以上内容由 sage-sim 离线模拟生成，用于在无真实 rycli 服务时演练完整交互链路。）
+（说明：以上内容由 content-sim 离线模拟生成，用于演练完整交互链路。）
 </text>
 EOF
