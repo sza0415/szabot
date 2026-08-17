@@ -316,7 +316,7 @@ go run ./cmd/skill-review \
 
 - **Skill 列表**：读取 `skills/` 下的每个 Skill（复用 `internal/skills` 的 Loader），显示 name / description / 依赖。
 - **编辑 SKILL.md**：在线修改 frontmatter 与正文，保存回磁盘（限制在 `skills/` 内，name 经清洗防路径穿越）。
-- **生成预设 Path**：从 SKILL.md 正文推导该 Skill 的执行路径（见下「Path 生成引擎」）。
+- **生成预设 Path**：从 SKILL.md 正文推导该 Skill 的执行路径（见下「Path 生成引擎」），结果缓存到 `skills/<name>/PATH.json`，再次加载直接读缓存（见下「Path 缓存」）。
 
 ### 模块二：测试用例构建
 
@@ -361,6 +361,17 @@ go run ./cmd/skill-review -serve -workspace .
 
 > LLM 引擎能读懂 SKILL.md 的语义，把 MCP 工具（`mcp_exec_sql` 等）、CLI 命令、品类分支、铁律注意事项都准确抽成节点；规则版仅识别 `bash` 脚本调用，适合无 API key 时快速出草稿。
 
+### Path 缓存（生成一次，加载即用）
+
+Path 生成有成本（尤其 LLM），因此结果会**落盘为 `skills/<name>/PATH.json`**（与 `SKILL.md` 同级，随 skill 走，可入库、可人工查看/编辑）：
+
+- **加载即用**：Web 工作台选中某个 Skill 时，先读它的 `PATH.json` 缓存，命中就直接渲染，不再重新生成；此时「生成预设 Path」按钮显示为「重新生成」。
+- **主动生成才落盘**：只有点「生成 / 重新生成」（基于磁盘上已保存的 `SKILL.md`）才会重算并覆盖 `PATH.json`。传入未保存草稿正文的预览生成不落盘。
+- **失效即重算**：缓存文件缺失或损坏时自动当作未缓存，回退到生成。
+- **重置**：删除对应的 `skills/<name>/PATH.json` 即可让该 Skill 下次重新生成。
+
+对应接口：`GET /api/skill/paths?name=` 读缓存（返回 `{cached, path}`），`POST /api/skill/paths` 生成并写缓存。
+
 ### HTTP 接口一览
 
 | 接口 | 方法 | 作用 |
@@ -369,7 +380,8 @@ go run ./cmd/skill-review -serve -workspace .
 | `/api/data` | GET | 评审模块列表 + 报告 + Path 定义 |
 | `/api/skills` | GET | 列出所有 Skill |
 | `/api/skill?name=` | GET / PUT | 读取 / 保存某个 SKILL.md |
-| `/api/skill/paths?engine=` | POST | 从 SKILL.md 生成预设 Path |
+| `/api/skill/paths?name=` | GET | 读取已存储的 Path 缓存（`PATH.json`） |
+| `/api/skill/paths?engine=` | POST | 生成预设 Path 并写入缓存 |
 
 ## 设计宪法
 

@@ -1,0 +1,62 @@
+{
+  "path_id": "path_szabot_play",
+  "name": "szabot-play 完整路径",
+  "entry_conditions": [
+    "用户提到看片、看样片、播放成片、看素材、项目视频、看视频"
+  ],
+  "nodes": [
+    {
+      "id": "match_intent",
+      "kind": "input",
+      "condition": "模型据 description 命中该 Skill",
+      "required": true,
+      "notes": [
+        "仅限影库项目影视视频（样片/成片/素材），非影视内容不适用"
+      ]
+    },
+    {
+      "id": "validate_context",
+      "kind": "validation",
+      "condition": "确认上下文隔离，仅遵循本文件和 references 规则，禁止调用 szabot_medium",
+      "required": true,
+      "notes": [
+        "禁止调用 szabot_medium 工具"
+      ]
+    },
+    {
+      "id": "check_pid_name",
+      "kind": "decision",
+      "condition": "检查是否缺少 pid 或 name",
+      "required": true,
+      "notes": [
+        "缺少时需加载 szabot-copilot Skill 查询，仅提取 pid 和 name"
+      ]
+    },
+    {
+      "id": "load_play_workflow",
+      "kind": "validation",
+      "condition": "必须先读取 references/play_workflow.md，不可跳过",
+      "required": true,
+      "notes": [
+        "具体执行步骤、参数定义全部在此文件中，禁止凭记忆构造参数"
+      ]
+    },
+    {
+      "id": "auth_play",
+      "kind": "tool",
+      "tool": "szabot_auth_play",
+      "condition": "调用 szabot_play MCP Server 的 szabot_auth_play 工具获取播放链接",
+      "required": true,
+      "notes": [
+        "跳转链接必须使用返回的原始 url，不得自行拼接"
+      ]
+    },
+    {
+      "id": "output",
+      "kind": "output",
+      "condition": "输出带权限的视频播放链接",
+      "required": true
+    }
+  ],
+  "exit": "output"
+}

@@ -1,0 +1,111 @@
+{
+  "path_id": "path_short_anime_data_query",
+  "name": "short-anime-data-query 完整路径",
+  "entry_conditions": [
+    "用户提到短番、漫剧、赤霄、SzStudio、SzCanvas、Rally（含 zen/szstudio/szcanvas/rally 等大小写变体）",
+    "用户有播放数据、收入成本等数据查询需求"
+  ],
+  "nodes": [
+    {
+      "id": "match_intent",
+      "kind": "input",
+      "condition": "模型据 description 命中该 Skill：用户明确提到短番/漫剧/赤霄/SzStudio/SzCanvas/Rally 关键词，且有数据查询需求",
+      "required": true,
+      "notes": [
+        "若用户只提项目名未提上述关键词，则不走本 Skill，改走 szabot-copilot",
+        "若询问 SzStudio 制作侧（素材数量、制作进度等），改走 szstudio-cms-board"
+      ]
+    },
+    {
+      "id": "validate_scope",
+      "kind": "validation",
+      "condition": "确认查询范围属于漫剧/短番/赤霄/SzStudio 的播放和收入指标，非侵权、非通用影视综信息",
+      "required": true,
+      "notes": [
+        "SzStudio 与 SzCanvas 同义，提到 zen/szstudio 等变体均视为 SzStudio，查询条件需加 is_szstudio = 1"
+      ]
+    },
+    {
+      "id": "load_references",
+      "kind": "validation",
+      "condition": "构建 SQL 前必须先读取 references 下的口径和表结构文档",
+      "required": true,
+      "notes": [
+        "读取 references/short_anime/*.md、references/chuku_schema.md、references/sql_query.md",
+        "路径为 /app/resources/skills/szabot/short-anime-data-query/references",
+        "禁止通过 mcp_exec_sql 扫描表结构或表列表"
+      ]
+    },
+    {
+      "id": "check_mcp_server",
+      "kind": "validation",
+      "condition": "验证 MCP Server szabot_data_query_svr 可用，执行 mcporter list szabot_data_query_svr",
+      "required": true,
+      "notes": [
+        "严禁猜测 MCP Server 名称，禁止将 Skill 名称当 MCP Server 名称"
+      ]
+    },
+    {
+      "id": "get_latest_imp_date",
+      "kind": "tool",
+      "tool": "mcp_exec_sql",
+      "condition": "步骤1：从 szdw_dim.chuku_progress 查询 MAX(imp_date) 获取最新分区日期",
+      "required": true,
+      "notes": [
+        "db_name 必须为 szdw_dim",
+        "禁止写死 imp_date"
+      ]
+    },
+    {
+      "id": "generate_sql",
+      "kind": "decision",
+      "condition": "基于口径规则和 references 生成 SQL，决定选用表、是否可聚合、是否需单位换算、排行榜口径等",
+      "required": true,
+      "notes": [
+        "口径铁律：只能使用 references 明确定义计算规则的指标，严禁自造口径",
+        "播放VV/UV、完播率、ROC、赤霄人均播放等按口径计算",
+        "普通指标与收入类指标的累计相减口径不同",
+        "数据时效上界：播放 CURDATE()-1，收入/成本 CURDATE()-2"
+      ]
+    },
+    {
+      "id": "execute_query",
+      "kind": "tool",
+      "tool": "mcp_exec_sql",
+      "condition": "步骤2：使用 db_name=short_anime_prod 执行业务 SQL 查询",
+      "required": true,
+      "notes": [
+        "必须使用 --args 参数传递 JSON",
+        "db_name 必须为 short_anime_prod 或 szdw_dim",
+        "单位换算必须在 SQL 中完成"
+      ]
+    },
+    {
+      "id": "format_output",
+      "kind": "validation",
+      "condition": "将查询结果整理成用户可读的表格/文本，IP 对比放在同一表格",
+      "required": true,
+      "notes": [
+        "不能手动换算单位",
+        "若指标计算公式未明确定义，直接返回原始字段值并注明"
+      ]
+    },
+    {
+      "id": "handle_errors",
+      "kind": "fallback",
+      "condition": "遇到 SQL 报错（如 db_name 非法、SQL 语法错误、数据未出库等）时，根据错误表排查修复",
+      "required": false,
+      "notes": [
+        "错误信息及解决方法见常见错误表",
+        "时效超上界时提示该日期数据尚未出库"
+      ]
+    },
+    {
+      "id": "output_result",
+      "kind": "output",
+      "condition": "输出最终查询结果，附带执行时间及数据来源",
+      "required": true
+    }
+  ],
+  "exit": "output_result"
+}

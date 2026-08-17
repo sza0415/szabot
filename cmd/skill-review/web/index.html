@@ -317,7 +317,22 @@ data: {"kind":"answer","text":"营销方案：…","done":true}'></textarea>
       } catch (_) {}
       $("skill-editor").value = body || placeholderSkillMd(name);
       renderSkillList();
-      $("skill-path").innerHTML = `<div class="empty">点击「生成预设 Path」从 SKILL.md 推导</div>`;
+      // 优先加载已存储的 Path 缓存（skills/<name>/PATH.json），有就直接渲染，
+      // 不必每次重新生成（尤其 LLM 生成有成本）。
+      $("skill-path").innerHTML = `<div class="empty">加载 Path…</div>`;
+      $("skill-gen").textContent = "生成预设 Path";
+      try {
+        const r = await fetch("/api/skill/paths?name=" + encodeURIComponent(name));
+        if (r.ok) {
+          const data = await r.json();
+          if (data && data.cached && data.path) {
+            renderPathFlow($("skill-path"), data.path.nodes || [], data.path);
+            $("skill-gen").textContent = "重新生成";
+            return;
+          }
+        }
+      } catch (_) {}
+      $("skill-path").innerHTML = `<div class="empty">尚无 Path，点击「生成预设 Path」从 SKILL.md 推导</div>`;
     }
     function placeholderSkillMd(name) {
       return `---\nname: ${name}\ndescription: "在此描述做什么、何时触发（触发关键词是唯一信号）"\nmetadata: {"requires":{"bins":[]}}\n---\n\n# ${name}\n\n## 命令速查\n\n## 重要规则\n\n## 异常处理\n`;
@@ -330,14 +345,16 @@ data: {"kind":"answer","text":"营销方案：…","done":true}'></textarea>
         alert(r.ok ? "已保存" : "保存失败（无后端时仅内存态）");
       } catch (_) { S.skill.body = content; alert("已暂存到内存（未连接后端）"); }
     }
-    // 规则版 Path 生成：从 SKILL.md 正文抽节点。意图匹配节点固定拼在最前。
+    // Path 生成：优先后端（LLM/规则版，结果落盘缓存），无后端时前端规则版兜底。
+    // 正式生成不传 content —— 基于磁盘已保存的 SKILL.md，这样后端才会写入 PATH.json 缓存。
     async function genPath() {
       if (!S.skill) { alert("请先选择一个 Skill"); return; }
       const md = $("skill-editor").value;
+      $("skill-path").innerHTML = `<div class="empty">生成中…</div>`;
       let path = null;
       try {
-        const r = await fetch("/api/skill/paths", { method: "POST", body: JSON.stringify({ name: S.skill.name, content: md }) });
-        if (r.ok) { path = await r.json(); }
+        const r = await fetch("/api/skill/paths", { method: "POST", body: JSON.stringify({ name: S.skill.name }) });
+        if (r.ok) { path = await r.json(); $("skill-gen").textContent = "重新生成"; }
       } catch (_) {}
       if (!path) { path = derivePathFromMd(S.skill.name, md); }
       renderPathFlow($("skill-path"), path.nodes || [], path);

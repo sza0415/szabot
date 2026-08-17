@@ -139,12 +139,55 @@ type genPathRequest struct {
 	Content string `json:"content"`
 }
 
-// handleGenPath: POST /api/skill/paths —— 从 SKILL.md 正文推导预设 Path。
+// handleGenPath: /api/skill/paths
+//
+//	GET  ?name=xxx           读取已存储的 Path 缓存（skills/<name>/PATH.json）。
+//	                         没有缓存时返回 {"cached": false}，前端据此提示去生成。
+//	POST {name, content?}    生成 Path 并写入缓存；带 content 草稿时只预览、不落盘。
+//	     ?engine=auto|llm|rule
+//
+// 生成有成本（尤其 LLM），因此结果落盘为 PATH.json，Web 加载时直接读缓存，
+// 只有用户主动「生成 / 重新生成」时才重算并覆盖。
 func (a *skillsAPI) handleGenPath(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
+	switch r.Method {
+	case http.MethodGet:
+		a.handleGetPath(w, r)
+	case http.MethodPost:
+		a.handlePostPath(w, r)
+	default:
 		httpError(w, http.StatusMethodNotAllowed, "method not allowed")
+	}
+}
+
+// handleGetPath 读取某个 skill 已存储的 Path 缓存。
+func (a *skillsAPI) handleGetPath(w http.ResponseWriter, r *http.Request) {
+	name, err := a.safeName(r.URL.Query().Get("name"))
+	if err != nil {
+		httpError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	data, err := os.ReadFile(a.pathCacheFile(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeJSON(w, map[string]any{"cached": false})
+			return
+		}
+		httpError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	var path skillreview.PathDefinition
+	if err := json.Unmarshal(data, &path); err != nil {
+		// 缓存损坏时当作未缓存，让前端重新生成。
+		writeJSON(w, map[string]any{"cached": false})
+		return
+	}
+	w.Header().Set("X-Path-Source", "cache")
+	writeJSON(w, map[string]any{"cached": true, "path": path})
+}
+
+// handlePostPath 生成 Path（LLM 优先，规则版兜底），并在使用磁盘 SKILL.md
+// 时把结果写入缓存。带 content 草稿（未保存的编辑）时只预览、不落盘。
+func (a *skillsAPI) handlePostPath(w http.ResponseWriter, r *http.Request) {
 	var req genPathRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
 		httpError(w, http.StatusBadRequest, "bad json")
@@ -155,8 +198,10 @@ func (a *skillsAPI) handleGenPath(w http.ResponseWriter, r *http.Request) {
 		httpError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	// draft=true 表示用请求体里的草稿正文生成（不落盘）；否则读磁盘 SKILL.md（结果落盘）。
+	draft := strings.TrimSpace(req.Content) != ""
 	content := req.Content
-	if strings.TrimSpace(content) == "" {
+	if !draft {
 		data, err := os.ReadFile(filepath.Join(a.skillsDir, name, "SKILL.md"))
 		if err != nil {
 			httpError(w, http.StatusNotFound, "SKILL.md not found")
@@ -190,8 +235,33 @@ func (a *skillsAPI) handleGenPath(w http.ResponseWriter, r *http.Request) {
 		path = derivePath(name, content)
 	}
 
+	// 只有基于磁盘 SKILL.md 的正式生成才落盘；草稿预览不覆盖缓存。
+	if !draft {
+		if err := a.writePathCache(name, path); err != nil {
+			log.Printf("[skill-review] 写入 Path 缓存失败 name=%s: %v", name, err)
+		}
+	}
+
 	w.Header().Set("X-Path-Source", source)
 	writeJSON(w, path)
+}
+
+// pathCacheFile 返回某 skill 的 Path 缓存文件路径（skills/<name>/PATH.json）。
+func (a *skillsAPI) pathCacheFile(name string) string {
+	return filepath.Join(a.skillsDir, name, "PATH.json")
+}
+
+// writePathCache 把生成好的 Path 以缩进 JSON 落盘，供下次直接加载。
+func (a *skillsAPI) writePathCache(name string, path skillreview.PathDefinition) error {
+	data, err := json.MarshalIndent(path, "", "  ")
+	if err != nil {
+		return err
+	}
+	file := a.pathCacheFile(name)
+	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(file, data, 0o644)
 }
 
 // safeName 清洗 skill 名，只允许字母数字、连字符、下划线，杜绝路径穿越。
