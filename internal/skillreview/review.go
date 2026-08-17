@@ -32,6 +32,12 @@ const (
 
 // NodeDefinition 是 Path 中可观察的节点。Tool、Condition 和 Notes 用于
 // 描述节点为什么存在以及执行时需要注意什么，而不只是记录一个节点名称。
+//
+// 分叉表达：一个 Skill 常常"按条件走不同分支、不同终点有不同预期"。
+//   - 线性节点：用 Next 指向唯一后继（0 或 1 个）；不填时按数组顺序隐式相连；
+//   - 判断节点（kind=decision）：用 Branches 列出多个互斥分支，每个分支带进入
+//     条件 When、指向的后继节点 To，以及该分支终点对应的预期 Expect。
+// 两个字段都可省略，因此旧的线性 Path 完全兼容。
 type NodeDefinition struct {
 	ID             string   `json:"id"`
 	Kind           NodeKind `json:"kind"`
@@ -40,6 +46,19 @@ type NodeDefinition struct {
 	ExpectedBranch string   `json:"expected_branch,omitempty"`
 	Required       bool     `json:"required"`
 	Notes          []string `json:"notes,omitempty"`
+	// Next 是线性后继节点 id（分叉时用 Branches 而非 Next）。
+	Next []string `json:"next,omitempty"`
+	// Branches 是判断节点的分支出口，每个分支走向不同后继与预期。
+	Branches []Branch `json:"branches,omitempty"`
+}
+
+// Branch 是判断节点（decision）的一条分支：满足 When 时走向 To 节点，
+// 该分支最终应产生的结果由 Expect 描述（可选，作为该分叉的预期草稿）。
+type Branch struct {
+	When   string             `json:"when"`             // 进入该分支的条件
+	To     string             `json:"to"`               // 指向的后继节点 id
+	Label  string             `json:"label,omitempty"`  // 分支简称（展示用）
+	Expect *OutputExpectation `json:"expect,omitempty"` // 该分支终点对应的预期结果
 }
 
 // PathDefinition 是从 Skill 中抽取出来的一条完整执行路径。

@@ -1,0 +1,234 @@
+{
+  "path_id": "path_kbcli",
+  "name": "kbcli 完整路径",
+  "entry_conditions": [
+    "影视综数据查询",
+    "结构化ID查询",
+    "营销方案",
+    "Agent 专家模式"
+  ],
+  "nodes": [
+    {
+      "id": "match_intent",
+      "kind": "input",
+      "condition": "激活 kbcli Skill，接收用户的影视综数据查询/专家问答请求",
+      "required": true,
+      "notes": [
+        "必须首先激活 Skill 并读取参考文档"
+      ],
+      "next": [
+        "read_references"
+      ]
+    },
+    {
+      "id": "read_references",
+      "kind": "validation",
+      "condition": "强制读取 references/kb-recall.md 和 references/sage.md",
+      "required": true,
+      "notes": [
+        "禁止跳过参考文档凭记忆或猜测拼接命令参数"
+      ],
+      "next": [
+        "decide_mode"
+      ]
+    },
+    {
+      "id": "decide_mode",
+      "kind": "decision",
+      "condition": "根据用户意图判断走查数线还是专家问答线",
+      "required": true,
+      "notes": [
+        "查数与专家两条线互斥，不可同时调用"
+      ],
+      "branches": [
+        {
+          "when": "用户需要查询影视数据（查数场景）",
+          "to": "kb_recall",
+          "label": "查数线",
+          "expect": {
+            "type": "指标或元数据结果",
+            "contains": [
+              "字段范围",
+              "指标"
+            ]
+          }
+        },
+        {
+          "when": "用户需要专家问答（@expert:market/variety/novel/script）",
+          "to": "sage_ask",
+          "label": "专家线",
+          "expect": {
+            "type": "专家回答文本",
+            "contains": [
+              "分析",
+              "建议"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "kb_recall",
+      "kind": "tool",
+      "tool": "kbcli kb-recall",
+      "condition": "所有查数场景的第一步，进行字段/指标范围召回",
+      "required": true,
+      "notes": [
+        "需要 --text 参数，可选 --scope"
+      ],
+      "next": [
+        "decide_search_mode"
+      ]
+    },
+    {
+      "id": "decide_search_mode",
+      "kind": "decision",
+      "condition": "根据召回结果判断使用 kb-search 的 SQL 模式还是 DSL 模式",
+      "required": true,
+      "notes": [
+        "SQL 模式用于电视剧播放指标取数，DSL 模式用于项目ID/剧集分类定位",
+        "两种模式互斥，同时传或都不传报 InvalidQuery"
+      ],
+      "branches": [
+        {
+          "when": "需要电视剧播放指标取数（MySQL 知识库）",
+          "to": "kb_search_sql",
+          "label": "SQL模式",
+          "expect": {
+            "type": "指标数据",
+            "contains": [
+              "数值"
+            ]
+          }
+        },
+        {
+          "when": "需要项目ID/剧集分类定位（ES 知识库）",
+          "to": "check_dsl_capability",
+          "label": "DSL模式",
+          "expect": {
+            "type": "元数据",
+            "contains": [
+              "ID",
+              "分类"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "kb_search_sql",
+      "kind": "tool",
+      "tool": "kbcli kb-search",
+      "condition": "使用 SQL 模式执行 MySQL 知识库取数，须同时传 --database 和 --sql",
+      "required": true,
+      "notes": [
+        "仅用于电视剧播放",
+        "执行 md_doc 内 SQL"
+      ],
+      "next": [
+        "output_sql"
+      ]
+    },
+    {
+      "id": "output_sql",
+      "kind": "output",
+      "condition": "返回 SQL 模式查询结果",
+      "required": true
+    },
+    {
+      "id": "check_dsl_capability",
+      "kind": "decision",
+      "condition": "判断 DSL 模式能否表达需求：不支持 range、rank、exact、多库并行",
+      "required": true,
+      "notes": [
+        "DSL 只支持 = / IN，值须带引号",
+        "若需 range/rank/exact/多库并行则走 MCP"
+      ],
+      "branches": [
+        {
+          "when": "需求中不需要 range/rank/exact/多库并行，仅需 condition+target+fuzzy",
+          "to": "kb_search_dsl",
+          "label": "可用CLI DSL",
+          "expect": {
+            "type": "元数据",
+            "contains": [
+              "ID",
+              "分类"
+            ]
+          }
+        },
+        {
+          "when": "需求涉及 range 区间过滤、rank 排序、exact 匹配或多库并行",
+          "to": "mcp_kb_search",
+          "label": "需MCP",
+          "expect": {
+            "type": "元数据",
+            "contains": [
+              "ID",
+              "分类"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "kb_search_dsl",
+      "kind": "tool",
+      "tool": "kbcli kb-search --query",
+      "condition": "使用 DSL 模式，--query 构造 SELECT 语法，值须带引号，压成一行",
+      "required": true,
+      "notes": [
+        "SELECT 后为 target，WHERE 后为 condition，只支持 = / IN，值必须带引号",
+        "返回结果包在 \u003ctext\u003e...\u003c/text\u003e"
+      ],
+      "next": [
+        "output_dsl"
+      ]
+    },
+    {
+      "id": "output_dsl",
+      "kind": "output",
+      "condition": "返回 DSL 模式查询结果",
+      "required": true
+    },
+    {
+      "id": "mcp_kb_search",
+      "kind": "tool",
+      "tool": "kb_search",
+      "condition": "调用 MCP 工具 szabot_tools.kb_search 执行高级查询",
+      "required": true,
+      "notes": [
+        "通过 mcporter call 'szabot_tools.kb_search(...)' 调用"
+      ],
+      "next": [
+        "output_mcp"
+      ]
+    },
+    {
+      "id": "output_mcp",
+      "kind": "output",
+      "condition": "返回 MCP 查询结果",
+      "required": true
+    },
+    {
+      "id": "sage_ask",
+      "kind": "tool",
+      "tool": "kbcli sage ask",
+      "condition": "专家问答场景，需要 --agent-id 和 --text 参数",
+      "required": true,
+      "notes": [
+        "agent-id 对应专家模式，如 market/variety/novel/script"
+      ],
+      "next": [
+        "output_sage"
+      ]
+    },
+    {
+      "id": "output_sage",
+      "kind": "output",
+      "condition": "返回专家回答",
+      "required": true
+    }
+  ],
+  "exit": "decide_mode"
+}

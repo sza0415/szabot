@@ -1,7 +1,6 @@
 ---
 name: kbcli
-description: >-
-  影库 CLI — 面向 AI Agent 专家模式，支持影视综数据查询、结构化 ID 查询、营销方案等服务。
+description: 影库 CLI — 面向 AI Agent 专家模式，支持影视综数据查询、结构化 ID 查询、营销方案等服务。
 user-invocable: true
 ---
 

@@ -73,35 +73,63 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// pathExtractSystemPrompt 指导模型把 SKILL.md 抽成一条 PathDefinition。
-// 关键约束：只输出 JSON、节点类型受限枚举、工具节点必须带 tool 名。
+// pathExtractSystemPrompt 指导模型把 SKILL.md 抽成一条带分叉的 PathDefinition。
+// 关键约束：只输出 JSON、节点类型受限枚举、工具节点必须带 tool 名、
+// 判断节点必须用 branches 表达分叉（而不是把所有分支拍平成一条线）。
 const pathExtractSystemPrompt = `你是 Skill 评审系统的路径抽取器。给你一个 Skill 的 SKILL.md 正文，
-请抽取出这个 Skill 从"意图命中"到"产出结果"的完整执行路径（Path），只输出一个 JSON 对象，不要任何解释文字、不要 markdown 代码块围栏。
+请抽取出这个 Skill 的完整执行路径（Path）。一个 Skill 往往会"根据不同意图/条件走不同分支，
+不同分支有不同的工具调用和不同的预期结果"——你必须把这种分叉如实表达成一棵树，
+不要拍平成一条直线。只输出一个 JSON 对象，不要任何解释文字、不要 markdown 代码块围栏。
 
 JSON 结构（严格遵守字段名）：
 {
   "path_id": "path_<skill名，非字母数字换成下划线>",
   "name": "<skill名> 完整路径",
-  "entry_conditions": ["触发该 Skill 的条件/关键词，如 @expert:market、用户提到侵权查询 等"],
+  "entry_conditions": ["触发该 Skill 的条件/关键词"],
   "nodes": [
-    {"id": "唯一英文小写下划线id", "kind": "input|validation|decision|tool|output|fallback", "tool": "工具名(仅 kind=tool 时必填)", "condition": "该节点做什么/进入条件", "required": true, "notes": ["注意事项(可选)"]}
+    {
+      "id": "唯一英文小写下划线id",
+      "kind": "input|validation|decision|tool|output|fallback",
+      "tool": "工具名(仅 kind=tool 时必填)",
+      "condition": "该节点做什么/进入条件",
+      "required": true,
+      "notes": ["注意事项(可选)"],
+      "next": ["线性后继节点id(0或1个；分叉节点不用next，用branches)"],
+      "branches": [
+        {
+          "when": "进入该分支的条件",
+          "to": "该分支指向的后继节点id",
+          "label": "分支简称",
+          "expect": {"type": "输出类型", "contains": ["应包含"], "not_contains": ["禁止包含"]}
+        }
+      ]
+    }
   ],
-  "exit": "最后一个节点id"
+  "exit": "主出口节点id"
 }
 
-节点抽取规则：
-- 第一个节点固定 kind=input、id=match_intent，表示"模型据 description 命中该 Skill"。
-- 工具调用要抽成 kind=tool 的节点，tool 字段填真实工具名。真实工具形态包括：
-    * MCP 调用：mcporter call 'server.tool'  → tool 填 tool 部分（如 mcp_exec_sql、kb_search、cms_search_assets）；
-    * CLI 命令：如 kbcli kb-search、kbcli kb-recall  → tool 填命令（如 kbcli kb-search）；
-    * bash 脚本：bash path/to/script  → tool 填脚本名。
-  同一 Skill 可能有多个工具节点，按正文里的调用顺序排列。
-- "必须先读 references/xxx""先读后调"等前置动作 → kind=validation。
-- 有条件分支/优先级判断（如按品类走不同链路）→ kind=decision。
-- "重要规则/禁止/不得/铁律"等约束 → 放进相关节点的 notes，或单独一个 kind=validation 节点。
+抽取规则：
+- 第一个节点固定 kind=input、id=match_intent。
+- 节点之间用 next（线性）或 branches（分叉）显式连接，形成一棵从 match_intent 出发的树。
+- 【分叉是重点】凡是正文里出现"若X则走A，若Y则走B""两条线互斥""按品类/模式分别处理"等，
+  必须建一个 kind=decision 节点，用 branches 列出每个互斥分支：
+    * when：进入该分支的判断条件；
+    * to：该分支的下一个节点id（通常是一个 tool 节点）；
+    * expect：该分支最终应产生的预期结果（尽量填 type 和关键 contains，用于区分不同分叉的不同预期）。
+  不要把互斥的分支平铺成一串 required=false 的节点。
+- 工具调用抽成 kind=tool 节点，tool 填真实工具名，识别三类形态：
+    * MCP：mcporter call 'server.tool' → tool 填 tool 部分（如 mcp_exec_sql、kb_search）；
+    * CLI：如 kbcli kb-search、kbcli sage → tool 填命令；
+    * bash 脚本 → tool 填脚本名。
+- "必须先读 references/xxx""先读后调" → kind=validation。
+- "重要规则/禁止/不得/铁律" → 放进相关节点/分支的 notes。
 - 异常处理/重试/兜底 → kind=fallback。
-- 最后一个节点 kind=output，表示产出结果。
-- required：核心必经节点 true，可选/兜底节点 false。
+- 每条分支应各自走到一个 kind=output 节点（不同分叉可有不同的 output 节点与不同 expect）。
+- required：核心必经节点 true，仅某分支才走的节点 false。
+
+示例（互斥双线）：一个既能"查数"又能"专家问答"的 Skill，match_intent 后接一个
+decision 节点，branches 有两支：一支 when="查数场景" to="run_query"，一支
+when="专家问答" to="run_expert"，两支各自走到不同的 output 且 expect 不同。
 
 只输出 JSON。`
 
