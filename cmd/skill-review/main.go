@@ -15,6 +15,8 @@ func main() {
 	runsPath := flag.String("runs", "", "实际执行 Trace JSON 文件")
 	serve := flag.Bool("serve", false, "启动本地评审仪表盘")
 	addr := flag.String("addr", ":8090", "仪表盘监听地址")
+	workspace := flag.String("workspace", ".", "workspace 根目录，Skill 读写沙盒")
+	skillsDir := flag.String("skills", "", "技能目录，默认 <workspace>/skills")
 	markdownPath := flag.String("markdown", "", "Markdown 报告输出路径，默认 stdout")
 	jsonPath := flag.String("json", "", "JSON 报告输出路径，可选")
 	version := flag.String("skill-version", "", "被评审的 Skill 版本")
@@ -49,7 +51,8 @@ func main() {
 	report := skillreview.Evaluate(cases, runs, *version)
 	report.SortResults()
 	if *serve {
-		if err := serveDashboard(*addr, report, paths); err != nil {
+		api := newSkillsAPI(*workspace, *skillsDir)
+		if err := serveDashboard(*addr, report, paths, api); err != nil {
 			fatal(err)
 		}
 		return

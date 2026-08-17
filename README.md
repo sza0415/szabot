@@ -1,12 +1,25 @@
 # szabot
 
-一个用 Go 实现的 agent 框架
+一个用 Go 实现的轻量 agent 框架，围绕一条极简的 agent 循环（消息总线 → AgentLoop → Runner → Provider）构建，核心保持精简，能力从边缘扩展。
+
+主要特性：
+
+- **多通道**：CLI（stdin/stdout）与 Web（HTTP + SSE 流式聊天）两种前端。
+- **多 Provider**：统一 LLM 接口，内置 Echo（零依赖验证）与 OpenAI 兼容实现（DeepSeek / OpenAI / Moonshot / Ollama 等）。
+- **工具箱**：文件类工具（read/write/edit/list_dir/glob/grep）开箱即用，可选的 bash/python 执行类工具跑在 Docker 沙盒里。
+- **技能系统（Skills）**：三层渐进式披露，L1 元数据常驻、L2/L3 按需 `read_file` 加载，往 `skills/` 丢个目录即可扩展。
+- **会话历史**：按 SessionID 持久化为 jsonl，同一会话自动带上上下文。
+- **Skill 评审工具（skill-review）**：独立的本地工作台，对 Skill 做执行路径建模与预期/实际对比，支持 LLM 抽取 Path，不依赖 Docker。
+
+> 设计宪法：Core stays small，所有新功能挂在 channel / tool / provider / skill 边上，不往核心循环塞业务。
 
 ## 目录结构
 
 ```
 szabot/
-├── cmd/szabot/             # CLI 入口（main.go：只做装配）
+├── cmd/
+│   ├── szabot/             # CLI 入口（main.go：只做装配）
+│   └── skill-review/       # Skill 路径评审工具（独立，不依赖 Docker）
 ├── internal/
 │   ├── bus/                # 消息总线（系统中枢）
 │   ├── agent/              # 核心循环
@@ -14,6 +27,8 @@ szabot/
 │   │   └── runner.go       #   内层：跟 LLM 来回打交道
 │   ├── channels/           # 通道（平台翻译官）
 │   │   └── cli.go          #   stdin/stdout 实现
+│   ├── skills/             # 技能系统（三层渐进式披露）
+│   ├── skillreview/        # Skill 评审内核（Path/Node/Case/Run/Evaluate/Report）
 │   └── providers/          # LLM 提供商
 │       ├── provider.go              #   统一接口
 │       ├── echo.go                  #   假实现，零依赖验证链路
@@ -247,6 +262,114 @@ L2 正文（`SKILL.md`）与 L3 子资源由 agent 用 `read_file` 按需读取�
 > 帮我拆解一下这类推理综艺的模式，能不能本土化改编
 > 帮我写一份某综艺这周的营销周报
 ```
+
+## Skill 评审（skill-review）
+
+`cmd/skill-review` 是一个**独立的本地工具**，用于对 `skills/` 下的 Skill 做「执行路径（Path）」建模与评审。它不执行 Skill、不依赖 Docker，只读取 `SKILL.md` / `references/` 做路径抽取与预期/实际对比，因此在没有沙盒的机器上也能用。
+
+评审工作台分三大模块，左侧栏目导航切换：
+
+```text
+① Skill 管理  ──▶  ② 测试用例构建  ──▶  ③ 评估与对比
+  列出/编辑 Skill    收集一次真实运行      预期路径 vs 实际路径
+  生成预设 Path      抽取成 Case/Run       指标 + 失败定位
+```
+
+### 启动 Web 工作台
+
+```bash
+# 最简：在项目根启动，评审 workspace/skills 下的所有 Skill
+go run ./cmd/skill-review -serve -workspace .
+
+# 打开浏览器
+# http://localhost:8090
+```
+
+常用参数：
+
+```bash
+go run ./cmd/skill-review \
+  -serve \                 # 启动本地 Web 工作台
+  -addr :8090 \            # 监听地址，默认 :8090
+  -workspace . \           # Skill 读写沙盒根，默认当前目录
+  -skills skills \         # 技能目录，默认 <workspace>/skills
+  -skill-version local     # 标注本次评审的 Skill 版本（写进报告，便于版本对比）
+```
+
+### 生成评审报告（命令行，非 serve）
+
+给定测试用例与实际执行 Trace，直接产出 Markdown / JSON 报告：
+
+```bash
+go run ./cmd/skill-review \
+  -cases cases.json \      # 测试用例（预期）
+  -runs runs.json \        # 实际执行 Trace
+  -paths paths.json \      # 可选：Path 定义，用于校验
+  -markdown report.md \    # 可选：Markdown 报告输出路径，默认 stdout
+  -json report.json \      # 可选：JSON 报告输出路径
+  -skill-version $(git rev-parse --short HEAD)
+```
+
+不带 `-serve` 时 `-cases` 与 `-runs` 必填。
+
+### 模块一：Skill 管理
+
+- **Skill 列表**：读取 `skills/` 下的每个 Skill（复用 `internal/skills` 的 Loader），显示 name / description / 依赖。
+- **编辑 SKILL.md**：在线修改 frontmatter 与正文，保存回磁盘（限制在 `skills/` 内，name 经清洗防路径穿越）。
+- **生成预设 Path**：从 SKILL.md 正文推导该 Skill 的执行路径（见下「Path 生成引擎」）。
+
+### 模块二：测试用例构建
+
+构建用例 = **收集一次真实运行**。szabot 运行时产生的 SSE 事件流（`{text, kind, delta, done}`，`kind` 为 `answer/reasoning/tool_call/tool_result`）可以粘贴进工作台，自动解析并抽取成：
+
+- `Run`（实际发生了什么：命中的 Skill、工具调用、有序节点、最终输出）；
+- `Case.Expected`（把这次运行固化成一条预期基线，供后续回归比对）。
+
+导出的 JSON 直接可作为命令行模式的 `runs.json` / `cases.json`。
+
+### 模块三：评估与对比
+
+选一条用例，工作台以**预期路径 / 实际路径双轨对齐**展示，不一致的节点标红并给出失败码（`skill_not_selected` / `path_mismatch` / `chain_step_missing` / `tool_missing` / `notice_missed` / `node_missing` / `output_*`），并汇总指标：Skill 命中率、Path/Node 覆盖率、路径匹配率、链路通过率、注意事项通过率、输出通过率。
+
+### Path 生成引擎（LLM 优先，规则版兜底）
+
+`POST /api/skill/paths` 支持两种抽取引擎，用查询参数 `engine` 控制：
+
+| `engine` | 行为 |
+|---|---|
+| `auto`（默认） | 有 LLM 就用 LLM，抽取失败自动回退规则版，保证总能出草稿 |
+| `llm` | 强制 LLM；未配置 Provider 时报错 |
+| `rule` | 强制规则版（正则启发式，抓 `bash` 脚本 / 触发词 / references） |
+
+响应头 `X-Path-Source: llm|rule` 标注本次实际用了哪种。
+
+**LLM 引擎复用 szabot 的 Provider 抽象**，环境变量约定与主程序一致（不配则自动走规则版，无需 API key 也能用）：
+
+```bash
+# 用 DeepSeek 做 Path 抽取（能识别 MCP 调用、CLI 命令、条件分支、注意事项）
+export SZABOT_PROVIDER=deepseek
+export DEEPSEEK_API_KEY=sk-xxxxxxxx
+# 可选：DEEPSEEK_MODEL（默认 deepseek-chat）、DEEPSEEK_BASE_URL
+
+# 或用 OpenAI 兼容端点
+# export SZABOT_PROVIDER=openai
+# export OPENAI_API_KEY=sk-xxxxxxxx
+# 可选：OPENAI_MODEL（默认 gpt-4o-mini）、OPENAI_BASE_URL
+
+go run ./cmd/skill-review -serve -workspace .
+```
+
+> LLM 引擎能读懂 SKILL.md 的语义，把 MCP 工具（`mcp_exec_sql` 等）、CLI 命令、品类分支、铁律注意事项都准确抽成节点；规则版仅识别 `bash` 脚本调用，适合无 API key 时快速出草稿。
+
+### HTTP 接口一览
+
+| 接口 | 方法 | 作用 |
+|---|---|---|
+| `/` | GET | Web 工作台页面 |
+| `/api/data` | GET | 评审模块列表 + 报告 + Path 定义 |
+| `/api/skills` | GET | 列出所有 Skill |
+| `/api/skill?name=` | GET / PUT | 读取 / 保存某个 SKILL.md |
+| `/api/skill/paths?engine=` | POST | 从 SKILL.md 生成预设 Path |
 
 ## 设计宪法
 

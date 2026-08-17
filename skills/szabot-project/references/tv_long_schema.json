@@ -1,0 +1,449 @@
+{
+  "category": 2,
+  "category_label": "电视剧（长剧）- 全部字段",
+  "description": "包含基础信息字段和外部数据源字段",
+  "submit_tool": "CreateDraft",
+  "$defs": {
+    "talent_query_config": {
+      "mcp_tool": "talent_simple_query",
+      "mcp_params_template": { "keyword": "{input}", "page_index": 0, "page_size": 5 },
+      "result_path": "data.data",
+      "result_fields": {
+        "tid": "tid", "t_name": "t_name", "pic_url": "pic_url",
+        "gender": "gender", "birthday": "birthday", "profession": "profession",
+        "set": "由用户选择"
+      },
+      "display_fields": ["t_name", "gender", "profession", "birthday", "pic_url"]
+    },
+    "company_search_config": {
+      "mcp_tool": "company_search",
+      "mcp_params_template": { "query": "{input}" },
+      "array_item": {
+        "type": "object",
+        "properties": [
+          {
+            "name": "company", "label": "公司", "type": "object",
+            "properties": [
+              { "name": "value", "label": "公司ID", "type": "string", "required": true },
+              { "name": "label", "label": "公司名称", "type": "string", "required": true },
+              { "name": "risk", "label": "风险性", "type": "string" },
+              { "name": "risk_statement", "label": "风险说明", "type": "string" }
+            ]
+          },
+          { "name": "product", "label": "产品", "type": "string" },
+          { "name": "set", "label": "剧集", "type": "string" }
+        ]
+      },
+      "display_fields": ["company.label", "company.risk", "company.risk_statement"]
+    },
+    "staff_info_config": {
+      "mcp_tool": "getStaffBaseInfo",
+      "mcp_params_template": { "name": "{input}" },
+      "result_field": {
+        "template": "{english_name}({chinese_name})",
+        "fields": { "english_name": "data.english_name", "chinese_name": "data.chinese_name" }
+      },
+      "display_fields": ["data.english_name", "data.chinese_name"]
+    },
+    "talent_item": {
+      "type": "object",
+      "properties": [
+        { "name": "t_desc", "label": "描述文本", "type": "string" },
+        { "name": "set", "label": "定选状态", "type": "string", "description": "1 已定 0 未定 2 拟定" },
+        { "name": "t_name", "label": "人才名", "type": "string", "required": true },
+        { "name": "tid", "label": "人才ID", "type": "string", "required": true }
+      ]
+    },
+    "actor_item": {
+      "type": "object",
+      "properties": [
+        { "name": "role", "label": "角色", "type": "string", "description": "为主要人物(leadRole)中某个对象的 name 属性" },
+        { "name": "set", "label": "定选状态", "type": "string", "description": "1 已定 0 未定 2 拟定" },
+        { "name": "t_name", "label": "人才名", "type": "string", "required": true },
+        { "name": "tid", "label": "人才ID", "type": "string", "required": true }
+      ]
+    },
+    "date_field_base": {
+      "type": "string", "format": "date", "format_pattern": "YYYY-MM-DD", "required": false
+    }
+  },
+  "fields": [
+    { "name": "pname", "label": "项目名称", "type": "string", "required": true },
+    {
+      "name": "pstatus", "label": "项目状态", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [
+        "创意概念阶段", "剧本大纲完成", "三分之一剧本完成", "全剧本初稿完成",
+        "剧本定稿+确认码盘", "已开机", "拍摄过半", "已杀青",
+        "已送省局", "已送总局/央视", "已过审待播", "已上线", "已播完"
+      ]
+    },
+    {
+      "name": "pnamePrevs", "label": "曾用名", "type": "array", "required": false,
+      "serialization": "semicolon", "array_item": { "type": "string" }
+    },
+    {
+      "name": "isIp", "label": "是否IP", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [
+        { "label": "外部IP", "value": "外部IP", "condition": { "field": "cooperationMode", "operator": "neq", "value": "主控剧" } },
+        "内部IP",
+        { "label": "外部原创选题", "value": "外部原创选题", "condition": { "field": "cooperationMode", "operator": "neq", "value": "主控剧" } },
+        "内部原创选题"
+      ]
+    },
+    {
+      "name": "ipName", "label": "使用IP/原创剧本名称", "type": "string", "required": false,
+      "condition": { "field": "isIp", "operator": "neq", "value": "内部IP" }
+    },
+    {
+      "name": "isCostumeDrama", "label": "是否古装", "type": "string", "behavior": "cascade",
+      "serialization": "csv", "required": false,
+      "cascade_levels": [{
+        "label": "是否古装",
+        "options": [
+          {
+            "label": "是", "value": "是",
+            "children": [
+              { "label": "三皇五帝", "value": "三皇五帝" }, { "label": "夏商周", "value": "夏商周" },
+              { "label": "春秋战国", "value": "春秋战国" }, { "label": "秦汉", "value": "秦汉" },
+              { "label": "三国", "value": "三国" }, { "label": "二晋", "value": "二晋" },
+              { "label": "南北朝", "value": "南北朝" }, { "label": "隋唐", "value": "隋唐" },
+              { "label": "五代十国", "value": "五代十国" }, { "label": "宋", "value": "宋" },
+              { "label": "元", "value": "元" }, { "label": "明", "value": "明" },
+              { "label": "清", "value": "清" }, { "label": "朝代架空", "value": "朝代架空" },
+              { "label": "仙侠架空", "value": "仙侠架空" }
+            ]
+          },
+          {
+            "label": "否", "value": "否",
+            "children": [
+              { "label": "当代（改革开放至今）", "value": "当代（改革开放至今）" },
+              { "label": "现代（1949-改革开放）", "value": "现代（1949-改革开放）" },
+              { "label": "近代（辛亥革命-1949）", "value": "近代（辛亥革命-1949）" },
+              { "label": "架空", "value": "架空" }
+            ]
+          }
+        ]
+      }]
+    },
+    {
+      "name": "playlet", "label": "剧集类型", "type": "string", "behavior": "enum", "required": true,
+      "enum_values": [
+        { "label": "长剧（45分钟/集）", "value": "长剧" },
+        { "label": "横屏短剧（15-20分钟/集）", "value": "横屏短剧" },
+        { "label": "横屏超短剧（3-4分钟/集）", "value": "横屏超短剧" },
+        { "label": "竖屏剧", "value": "竖屏剧" }
+      ]
+    },
+    { "name": "deliverFilmFormat", "label": "交片格式", "type": "string", "required": false },
+    {
+      "name": "cooperationMode", "label": "合作模式", "type": "string", "behavior": "enum", "required": true,
+      "enum_values": ["主控剧", "共创剧", "版权剧", "分账剧", "境外剧", "待定"]
+    },
+    {
+      "name": "dominantType", "label": "主导类型", "type": "string", "behavior": "enum", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "eq", "value": "共创剧" },
+      "enum_values": ["外部主导", "平台主导"]
+    },
+    {
+      "name": "copyrightDramaType", "label": "版权剧分类", "type": "string", "behavior": "cascade",
+      "serialization": "csv", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "eq", "value": "版权剧" },
+      "cascade_levels": [{
+        "label": "版权剧分类",
+        "options": [
+          { "label": "独家", "value": "独家" },
+          { "label": "定向独家（联采）", "value": "定向独家（联采）" },
+          { "label": "非独家采买", "value": "非独家采买" },
+          {
+            "label": "置换", "value": "置换",
+            "children": [
+              { "label": "云溪视频独家版权剧", "value": "云溪视频独家版权剧" },
+              { "label": "澜图视频独家版权剧", "value": "澜图视频独家版权剧" },
+              { "label": "芒果独家版权剧", "value": "芒果独家版权剧" },
+              { "label": "云溪视频自制剧", "value": "云溪视频自制剧" },
+              { "label": "澜图视频自制剧", "value": "澜图视频自制剧" },
+              { "label": "芒果自制剧", "value": "芒果自制剧" },
+              { "label": "搜狐独家版权剧", "value": "搜狐独家版权剧" },
+              { "label": "搜狐自制剧", "value": "搜狐自制剧" }
+            ]
+          },
+          { "label": "片库", "value": "片库" },
+          {
+            "label": "分销", "value": "分销",
+            "children": [
+              { "label": "云溪视频独家版权剧", "value": "云溪视频独家版权剧" },
+              { "label": "澜图视频独家版权剧", "value": "澜图视频独家版权剧" },
+              { "label": "芒果独家版权剧", "value": "芒果独家版权剧" },
+              { "label": "云溪视频自制剧", "value": "云溪视频自制剧" },
+              { "label": "澜图视频自制剧", "value": "澜图视频自制剧" },
+              { "label": "芒果自制剧", "value": "芒果自制剧" }
+            ]
+          }
+        ]
+      }]
+    },
+    {
+      "name": "splitDramaType", "label": "分账剧分类", "type": "string", "behavior": "enum", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "eq", "value": "分账剧" },
+      "enum_values": ["纯分成（独家）", "纯分成（非独家）"]
+    },
+    {
+      "name": "isBuyCompleteDrama", "label": "是否成片采买", "type": "string", "behavior": "enum", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "eq", "value": "版权剧" },
+      "enum_values": ["非成片采买", "成片采买"]
+    },
+    {
+      "name": "dramaLocation", "label": "拍摄地", "type": "array", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "neq", "value": "分账剧" },
+      "array_item": {
+        "type": "object",
+        "properties": [
+          { "name": "province", "label": "省份", "type": "string", "required": true },
+          { "name": "address", "label": "详细地址", "type": "string", "required": false }
+        ]
+      }
+    },
+    {
+      "name": "mediaPlatform", "label": "新媒体平台", "type": "array", "behavior": "enum",
+      "serialization": "semicolon", "required": false,
+      "enum_values": ["星舟视频", "搜狐视频", "云溪视频", "澜图视频", "土豆", "乐视", "其他", "芒果tv", "B站", "西瓜视频", "咪咕", "红果", "待定"]
+    },
+    {
+      "name": "tvStation", "label": "播出电视台", "type": "array", "required": false,
+      "array_item": {
+        "type": "object",
+        "properties": [
+          { "name": "name", "label": "电视台名称", "type": "string", "required": true },
+          { "name": "round", "label": "轮次", "type": "string", "required": false },
+          { "name": "period", "label": "时段", "type": "string", "required": false }
+        ]
+      }
+    },
+    { "name": "tvPublishingRemark", "label": "卫视发行权说明", "type": "string", "required": false },
+    { "name": "companyProducer", "label": "制作公司制片人", "description": "用户输入的纯文本", "type": "string", "required": false },
+    {
+      "name": "isPolicyProject", "label": "是否政策项目", "type": "number", "behavior": "enum", "required": false,
+      "enum_values": [
+        { "label": "未知", "value": 0 }, { "label": "是", "value": 1 }, { "label": "否", "value": 2 }
+      ]
+    },
+    {
+      "name": "studio", "label": "所属工作室", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [
+        "星汉团队", "星和团队", "星野团队", "星翼团队", "弓旭",
+        "火星团队", "星瞳团队", "星图团队", "S团队", "红豆团队", "星达团队",
+        "火车团队", "春娇团队", "飞行器团队", "轻舟团队", "启年团队",
+        "佳骏团队", "花囍团队", "天然工作室", "版权及发行中心"
+      ]
+    },
+    { "name": "remark", "label": "备注", "type": "string", "required": false },
+    {
+      "name": "topicType2", "label": "题材类型", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [
+        "古代爱情-落地古偶", "古代爱情-仙侠志怪", "民国爱情",
+        "现代爱情-青春爱恋", "现代爱情-曲折爱情", "现代爱情-熟龄爱情",
+        "家庭剧", "生活议题", "社会议题", "时代报告", "喜剧",
+        "英雄玄幻", "青春热血", "武侠江湖", "宅门争斗",
+        "现代军警", "职场燃爽", "探险猎奇", "体育竞技", "革命战争",
+        "刑侦犯罪", "烧脑悬疑", "社会悬疑", "谍战国安", "科学幻想",
+        "古代传奇-男", "古代传奇-女", "近代传奇-男", "近代传奇-女",
+        "现当代传奇-男", "现当代传奇-女"
+      ]
+    },
+    {
+      "name": "topicTypeDesc", "label": "题材描述", "type": "string", "required": false,
+      "description": "对题材类型的补充说明，较为主观的信息，如故事风格、情感基调、核心看点等"
+    },
+    { "name": "onelineIntro", "label": "一句话梗概", "type": "string", "required": false },
+    { "name": "brief", "label": "项目简介", "type": "string", "required": false },
+    { "name": "sparkle", "label": "项目亮点", "type": "string", "required": false },
+    {
+      "name": "leadRole", "label": "主要人物",
+      "description": "电视剧剧本当中主要的角色，包括角色的名称和角色的描述",
+      "type": "array", "required": false,
+      "array_item": {
+        "type": "object",
+        "properties": [
+          { "name": "name", "label": "人物名称", "type": "string", "required": true },
+          { "name": "desc", "label": "人物介绍", "type": "string", "required": false }
+        ]
+      }
+    },
+    {
+      "name": "roleRelations", "label": "人物关系",
+      "description": "电视剧剧本当中角色之间的关系",
+      "type": "string", "required": false
+    },
+    { "name": "leadActorRemark", "label": "主创补充说明", "type": "string", "required": false },
+    { "name": "seriesNumber", "label": "制作集数", "type": "string", "format": "integer", "required": false },
+    { "name": "duration", "label": "单集正片总分钟数（含片头尾）", "type": "string", "format": "integer", "required": false },
+    {
+      "name": "ifOnlyPlay", "label": "是否独播", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [{ "label": "独播", "value": "Y" }, { "label": "非独播", "value": "N" }]
+    },
+    {
+      "name": "isSelfPlay", "label": "是否平台自主排播", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": ["是", "否"]
+    },
+    {
+      "name": "isPostBonus", "label": "是否后验激励", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [{ "label": "是", "value": "1" }, { "label": "否", "value": "0" }]
+    },
+    { "name": "copyrightDuration", "label": "版权期限", "type": "string", "required": false },
+    {
+      "name": "copyrightArea", "label": "版权区域", "type": "array", "serialization": "semicolon",
+      "behavior": "enum", "required": false,
+      "enum_values": [
+        { "label": "全球", "value": "1" },
+        { "label": "中国（包括港澳台）", "value": "2" },
+        { "label": "中国大陆（不包括港澳台）", "value": "3" },
+        { "label": "中国（包括港澳台）+东盟十国", "value": "4" },
+        { "label": "中国（包括港澳台）+东南亚", "value": "5" },
+        { "label": "中国（包括港澳台）+星舟视频海外站", "value": "6" },
+        { "label": "中国大陆（不包括港澳台）+星舟视频海外站", "value": "7" },
+        { "label": "其他", "value": "99" }
+      ]
+    },
+    {
+      "name": "property", "label": "性质", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": ["纯网剧", "网台剧", "待定"]
+    },
+    {
+      "name": "dramaBeianType", "label": "备案类型", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": ["电视剧", "网络剧", "待定"]
+    },
+    {
+      "name": "dramaBeianStatus", "label": "备案状态", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [
+        "未提交申请拍摄许可证/规划备案号", "已提交申请拍摄许可证/规划备案号",
+        "已出拍摄许可证/规划备案号", "已送省局审核样片",
+        "已出发行许可证号/上线备案号", "已送总局/央视审查", "已通过总局/央视审查"
+      ]
+    },
+    {
+      "name": "recordLocalBureau", "label": "备案地方局", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": [
+        "北京市", "上海市", "天津市", "重庆市",
+        "广东省", "江苏省", "山东省", "浙江省", "河南省", "四川省", "湖北省", "湖南省",
+        "河北省", "福建省", "安徽省", "辽宁省", "陕西省", "江西省", "云南省", "山西省",
+        "吉林省", "贵州省", "甘肃省", "海南省", "青海省", "黑龙江省",
+        "西藏自治区", "内蒙古自治区", "广西壮族自治区", "宁夏回族自治区", "新疆维吾尔自治区",
+        "深圳市", "中直"
+      ]
+    },
+    { "name": "beianBureau", "label": "备案机构", "type": "string", "required": false },
+    {
+      "name": "headOfficeCategory", "label": "备案题材分类", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": ["当代都市", "当代军旅", "当代科幻", "当代其它", "当代涉案", "古代其它", "近代革命", "现代都市"]
+    },
+    {
+      "name": "nationalBureauReviewEra", "label": "备案年代", "type": "string", "behavior": "enum", "required": false,
+      "enum_values": ["当代", "现代", "近代", "古代", "其他"]
+    },
+    { "name": "issueTime", "label": "发证时间", "type": "string", "format": "date", "required": false },
+    { "name": "uptime", "label": "预计开机时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "completeTime", "label": "预计杀青时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "planProvinceBureauTime", "label": "预计送省局时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "planNationalBureauTime", "label": "预计送总局/央视时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "reviewedDeliverDate", "label": "预计过审待播时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "actualRealUptime", "label": "实际开机时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "actualCompleteTime", "label": "实际杀青时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "actualProvinceBureauTime", "label": "实际送省局时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "actualNationalBureauTime", "label": "实际送总局/央视时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "actualReviewedDeliverDate", "label": "实际过审待播时间", "$ref": "#/$defs/date_field_base" },
+    { "name": "filmingLicenseNo", "label": "拍摄许可证", "type": "string", "required": false },
+    {
+      "name": "ipList", "label": "使用IP/原创剧本名称", "type": "array", "behavior": "external", "required": false,
+      "condition": { "field": "isIp", "operator": "eq", "value": "内部IP" },
+      "mcp_tool": "search_ip",
+      "mcp_params_template": { "ip_name": "{input}", "page_idx": 1, "page_size": 5, "play_type": "80" },
+      "array_item": {
+        "type": "object",
+        "properties": [
+          { "name": "_id", "label": "IP ID", "type": "string", "required": true },
+          { "name": "Fip_name", "label": "IP名称", "type": "string", "required": true },
+          { "name": "Fip_use_name", "label": "IP使用名称", "type": "string" },
+          { "name": "Fcopyright_start", "label": "版权开始时间", "type": "string" },
+          { "name": "Fcopyright_end", "label": "版权结束时间", "type": "string" }
+        ]
+      },
+      "result_fields": {
+        "_id": "ledger_id", "Fip_name": "name", "Fip_use_name": "ip_use_name",
+        "Fcopyright_start": "authorize_start_time", "Fcopyright_end": "authorize_end_time"
+      },
+      "display_fields": ["ip_name", "ip_use_name", "copyright_start", "copyright_end"]
+    },
+    {
+      "name": "partner", "label": "制作团队", "type": "array", "behavior": "external", "required": false,
+      "$ref": "#/$defs/company_search_config"
+    },
+    {
+      "name": "hzProducer", "label": "出品方", "type": "array", "behavior": "external", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "in", "value": ["主控剧", "共创剧"] },
+      "$ref": "#/$defs/company_search_config"
+    },
+    {
+      "name": "copyrightFrom", "label": "版权来源", "type": "array", "behavior": "external", "required": false,
+      "condition": { "field": "cooperationMode", "operator": "in", "value": ["版权剧", "分账剧"] },
+      "$ref": "#/$defs/company_search_config"
+    },
+    {
+      "name": "producerKpiList", "label": "制片人", "type": "array", "behavior": "external", "required": false,
+      "array_item": {
+        "type": "object",
+        "properties": [
+          { "name": "name", "label": "制片人名称", "type": "string", "required": true },
+          { "name": "kpi", "label": "KPI占比", "type": "number", "required": true }
+        ]
+      },
+      "mcp_tool": "getStaffBaseInfo",
+      "mcp_params_template": { "name": "{input}" },
+      "result_fields": {
+        "name": {
+          "template": "{english_name}({chinese_name})",
+          "fields": { "english_name": "data.english_name", "chinese_name": "data.chinese_name" }
+        },
+        "kpi": "data.kpi"
+      },
+      "display_fields": ["name", "kpi"]
+    },
+    {
+      "name": "marketPMs", "label": "市场PM", "type": "array", "behavior": "external", "required": false,
+      "$ref": "#/$defs/staff_info_config"
+    },
+    {
+      "name": "chiefEditors", "label": "责编", "type": "array", "behavior": "external", "required": false,
+      "$ref": "#/$defs/staff_info_config"
+    },
+    {
+      "name": "superProducer", "label": "监制", "type": "array", "behavior": "external", "required": false,
+      "description": "每个元素包含描述文本、定选状态、人才名和人才ID",
+      "$ref": "#/$defs/talent_query_config",
+      "array_item": { "$ref": "#/$defs/talent_item" }
+    },
+    {
+      "name": "director", "label": "导演", "type": "array", "behavior": "external", "required": false,
+      "description": "每个元素包含描述文本、定选状态、人才名和人才ID",
+      "$ref": "#/$defs/talent_query_config",
+      "array_item": { "$ref": "#/$defs/talent_item" }
+    },
+    {
+      "name": "writer", "label": "编剧", "type": "array", "behavior": "external", "required": false,
+      "description": "每个元素包含描述文本、定选状态、人才名和人才ID",
+      "$ref": "#/$defs/talent_query_config",
+      "array_item": { "$ref": "#/$defs/talent_item" }
+    },
+    {
+      "name": "leadActor", "label": "主要演员", "type": "array", "behavior": "external", "required": false,
+      "description": "每个元素包含角色、定选状态、人才名和人才ID。role 的值来自主要人物(leadRole)中某个对象的 name 属性",
+      "$ref": "#/$defs/talent_query_config",
+      "array_item": { "$ref": "#/$defs/actor_item" }
+    },
+    {
+      "name": "otherActor", "label": "其他演员", "type": "array", "behavior": "external", "required": false,
+      "description": "每个元素包含角色、定选状态、人才名和人才ID。role 的值来自主要人物(leadRole)中某个对象的 name 属性",
+      "$ref": "#/$defs/talent_query_config",
+      "array_item": { "$ref": "#/$defs/actor_item" }
+    }
+  ]
+}

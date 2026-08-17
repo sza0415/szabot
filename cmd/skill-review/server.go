@@ -18,12 +18,15 @@ type dashboardData struct {
 	Paths   []skillreview.PathDefinition `json:"paths"`
 }
 
-func serveDashboard(addr string, report skillreview.Report, paths []skillreview.PathDefinition) error {
+func serveDashboard(addr string, report skillreview.Report, paths []skillreview.PathDefinition, skillsAPI *skillsAPI) error {
 	data, err := json.Marshal(dashboardData{Modules: skillreview.ReviewModules(), Report: report, Paths: paths})
 	if err != nil {
 		return fmt.Errorf("marshal dashboard data: %w", err)
 	}
 	mux := http.NewServeMux()
+	if skillsAPI != nil {
+		skillsAPI.register(mux)
+	}
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

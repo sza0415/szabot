@@ -6,183 +6,516 @@
   <title>Skill Review</title>
   <style>
     :root {
-      --ink: #16283c;
-      --muted: #65788c;
-      --line: #dce6ed;
-      --paper: #f4f7f8;
+      --ink: #1f2933;
+      --muted: #6b7680;
+      --faint: #9aa5ad;
+      --line: #e2e6ea;
+      --line-soft: #eef1f3;
+      --bg: #fafafa;
       --white: #ffffff;
-      --blue: #2167c7;
-      --blue-soft: #eaf2fc;
-      --teal: #138f9e;
-      --teal-soft: #e5f5f4;
-      --orange: #c76f1a;
-      --orange-soft: #fff1df;
-      --red: #b54444;
-      --green: #25815f;
-      --shadow: 0 8px 24px rgba(28, 55, 76, .07);
+      --accent: #2f6f9f;
+      --accent-soft: #eef4f9;
+      --ok: #2f7d54;
+      --bad: #b0413c;
+      --warn: #9a6a12;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--paper); color: var(--ink); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
-    button { font: inherit; }
-    .shell { max-width: 1440px; margin: 0 auto; padding: 28px 32px 48px; }
-    .topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 24px; }
-    .eyebrow { color: var(--blue); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
-    h1 { margin: 5px 0 5px; font-size: clamp(26px, 3vw, 40px); letter-spacing: 0; line-height: 1.12; }
-    .subtitle { margin: 0; color: var(--muted); }
-    .version { border-left: 3px solid var(--teal); padding: 8px 0 8px 14px; color: var(--muted); min-width: 210px; }
-    .version strong { display: block; color: var(--ink); font-size: 15px; }
-    .metrics { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 10px; margin-bottom: 24px; }
-    .metric { background: var(--white); border: 1px solid var(--line); border-top: 3px solid var(--blue); padding: 16px 18px; box-shadow: var(--shadow); }
-    .metric:nth-child(2), .metric:nth-child(5) { border-top-color: var(--teal); }
-    .metric:nth-child(3) { border-top-color: var(--orange); }
-    .metric-label { color: var(--muted); font-size: 12px; }
-    .metric-value { margin-top: 4px; font-size: 25px; font-weight: 700; }
-    .workspace { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 18px; align-items: start; }
-    .panel { background: var(--white); border: 1px solid var(--line); box-shadow: var(--shadow); }
-    .sidebar { padding: 0 0 8px; }
-    .panel-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; border-bottom: 1px solid var(--line); }
-    .panel-head h2 { margin: 0; font-size: 15px; }
-    .count { color: var(--muted); font-size: 12px; }
-    .stage-nav { padding: 8px; border-bottom: 1px solid var(--line); }
-    .stage-item { width: 100%; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 10px; border: 1px solid transparent; background: transparent; color: var(--ink); text-align: left; }
-    .stage-item.planned { color: #8b9aa7; }
-    .stage-index { color: var(--blue); font: 700 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .stage-item.planned .stage-index { color: #aab7c1; }
-    .stage-title { display: block; font-weight: 700; font-size: 13px; }
-    .stage-description { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
-    .stage-state { color: var(--muted); font-size: 10px; white-space: nowrap; }
-    .stage-item.active { background: var(--blue-soft); border-color: #b8d3f3; }
-    .stage-item.active .stage-state { color: var(--blue); font-weight: 700; }
-    .stage-item.planned .stage-state { color: #aab7c1; }
-    .subsection-head { padding: 14px 18px 6px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
-    .path-list { padding: 8px; }
-    .path-item { width: 100%; display: block; text-align: left; background: transparent; border: 1px solid transparent; padding: 13px 12px; cursor: pointer; color: var(--ink); }
-    .path-item:hover { background: #f5f9fb; }
-    .path-item.active { background: var(--blue-soft); border-color: #b8d3f3; }
-    .path-name { display: block; font-weight: 700; margin-bottom: 4px; }
-    .path-id { color: var(--muted); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .detail { min-width: 0; }
-    .detail-head { padding: 20px 22px; display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); }
-    .detail-head h2 { margin: 0 0 3px; font-size: 21px; }
-    .detail-head p { margin: 0; color: var(--muted); }
-    .badge { align-self: flex-start; padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
-    .badge.pass { background: #e6f5ee; color: var(--green); }
-    .badge.fail { background: #fce9e8; color: var(--red); }
-    .path-flow { display: flex; gap: 0; overflow-x: auto; padding: 22px; border-bottom: 1px solid var(--line); }
-    .node { flex: 0 0 180px; min-height: 132px; padding: 14px; background: #fbfcfd; border: 1px solid var(--line); position: relative; }
-    .node:not(:last-child) { margin-right: 24px; }
-    .node:not(:last-child)::after { content: "→"; position: absolute; right: -20px; top: 51px; color: var(--blue); font-size: 19px; font-weight: 700; }
-    .node.tool { border-top: 3px solid var(--teal); }
-    .node.decision { border-top: 3px solid var(--blue); }
-    .node.validation { border-top: 3px solid var(--orange); }
-    .node.output { border-top: 3px solid var(--green); }
-    .node-kind { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
-    .node h3 { margin: 6px 0 5px; font-size: 14px; overflow-wrap: anywhere; }
-    .node p { margin: 0; color: var(--muted); font-size: 12px; }
-    .tool { margin-top: 10px; display: inline-block; color: var(--teal); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .lower { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: 18px; padding: 18px 22px 22px; }
-    .section-title { margin: 0 0 12px; font-size: 13px; }
-    .case-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; border-bottom: 1px solid var(--line); padding: 10px 0; }
-    .case-row:last-child { border-bottom: 0; }
-    .case-id { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); }
-    .case-name { margin-top: 2px; font-weight: 600; }
-    .status { font-weight: 700; font-size: 12px; }
-    .status.pass { color: var(--green); }
-    .status.fail { color: var(--red); }
-    .failure { background: var(--orange-soft); border-left: 3px solid var(--orange); padding: 11px 12px; margin-bottom: 8px; color: #74440f; }
-    .failure code { color: #9c5510; }
-    .empty { color: var(--muted); padding: 16px 0; }
-    .notes { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
-    @media (max-width: 900px) {
-      .shell { padding: 20px 16px 32px; }
-      .topbar { display: block; }
-      .version { margin-top: 18px; }
-      .metrics { grid-template-columns: repeat(2, 1fr); }
-      .workspace { grid-template-columns: 1fr; }
-      .path-list { display: flex; gap: 8px; overflow-x: auto; }
-      .path-item { min-width: 220px; }
-      .lower { grid-template-columns: 1fr; }
+    html, body { height: 100%; }
+    body {
+      margin: 0; background: var(--bg); color: var(--ink);
+      font: 13.5px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
-    @media (max-width: 480px) { .metrics { grid-template-columns: 1fr 1fr; } .metric { padding: 12px; } .metric-value { font-size: 21px; } }
+    button, input, textarea, select { font: inherit; color: inherit; }
+    a { color: var(--accent); }
+    code, .mono { font-family: var(--mono); }
+
+    .layout { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
+
+    /* ---------- 左侧栏目导航 ---------- */
+    .sidebar { background: var(--white); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+    .brand { padding: 16px 18px; border-bottom: 1px solid var(--line); }
+    .brand .title { font-weight: 600; font-size: 14px; }
+    .brand .sub { color: var(--faint); font-size: 11.5px; margin-top: 2px; }
+    .nav { padding: 8px; }
+    .nav-item {
+      width: 100%; text-align: left; background: transparent; border: 1px solid transparent;
+      border-radius: 4px; padding: 9px 10px; margin-bottom: 2px; cursor: pointer; color: var(--ink);
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    .nav-item:hover { background: var(--line-soft); }
+    .nav-item.active { background: var(--accent-soft); border-color: #cfe0ec; }
+    .nav-item .idx { font: 11px var(--mono); color: var(--faint); width: 16px; }
+    .nav-item.active .idx { color: var(--accent); }
+    .nav-item .lbl { font-weight: 500; }
+    .nav-item.planned { color: var(--faint); }
+    .nav-item .tag { margin-left: auto; font-size: 10px; color: var(--faint); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+
+    .ctx { margin-top: auto; padding: 14px 18px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+    .ctx .row { display: flex; justify-content: space-between; padding: 3px 0; }
+    .ctx .row b { color: var(--ink); font-weight: 500; }
+
+    /* ---------- 右侧工作区 ---------- */
+    .work { padding: 22px 26px 40px; min-width: 0; }
+    .work-head { margin-bottom: 18px; }
+    .work-head h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    .work-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .card { background: var(--white); border: 1px solid var(--line); border-radius: 6px; }
+    .card + .card { margin-top: 16px; }
+    .card-head { padding: 12px 16px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; gap: 10px; }
+    .card-head h2 { margin: 0; font-size: 14px; font-weight: 600; }
+    .card-head .hint { color: var(--faint); font-size: 12px; }
+    .card-head .spacer { margin-left: auto; }
+    .card-body { padding: 16px; }
+
+    .split { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+    @media (max-width: 1000px) { .split { grid-template-columns: 1fr; } }
+
+    .list { border: 1px solid var(--line); border-radius: 6px; background: var(--white); overflow: hidden; }
+    .list-item { width: 100%; text-align: left; background: transparent; border: 0; border-bottom: 1px solid var(--line-soft); padding: 11px 13px; cursor: pointer; display: block; }
+    .list-item:last-child { border-bottom: 0; }
+    .list-item:hover { background: var(--line-soft); }
+    .list-item.active { background: var(--accent-soft); }
+    .list-item .name { font-weight: 500; }
+    .list-item .desc { color: var(--muted); font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+    .list-item .meta { margin-top: 5px; font: 11px var(--mono); color: var(--faint); }
+
+    .btn { border: 1px solid var(--line); background: var(--white); border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+    .btn:hover { border-color: #c5ccd2; }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.primary:hover { background: #285f89; }
+    .btn.small { padding: 4px 9px; font-size: 12px; }
+
+    textarea, input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 9px 10px; background: #fff; }
+    textarea { resize: vertical; font-family: var(--mono); font-size: 12.5px; line-height: 1.5; }
+    label.field { display: block; margin-bottom: 12px; }
+    label.field > span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+
+    .kbd { font: 11px var(--mono); background: var(--line-soft); border: 1px solid var(--line); border-radius: 3px; padding: 1px 5px; }
+    .empty { color: var(--faint); padding: 18px 4px; text-align: center; }
+
+    /* metrics */
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    @media (max-width: 760px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+    .metric { border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; background: #fff; }
+    .metric .k { color: var(--muted); font-size: 12px; }
+    .metric .v { font-size: 20px; font-weight: 600; margin-top: 3px; }
+
+    /* path compare */
+    .track { margin-bottom: 14px; }
+    .track .track-label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .track .row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+    .pnode { flex: 0 0 auto; min-width: 116px; border: 1px solid var(--line); border-radius: 5px; padding: 8px 10px; background: #fff; position: relative; }
+    .pnode + .pnode { margin-left: 12px; }
+    .pnode + .pnode::before { content: "→"; position: absolute; left: -13px; top: 50%; transform: translateY(-50%); color: var(--faint); }
+    .pnode .kind { font: 10px var(--mono); color: var(--faint); text-transform: uppercase; }
+    .pnode .id { font-weight: 500; margin-top: 2px; overflow-wrap: anywhere; }
+    .pnode .tool { margin-top: 4px; font: 10.5px var(--mono); color: var(--accent); }
+    .pnode.ok { border-color: #c4dfce; }
+    .pnode.bad { border-color: #e3bcba; background: #fdf5f4; }
+    .pnode.miss { border-style: dashed; color: var(--bad); border-color: #e3bcba; }
+
+    table.cases { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.cases th, table.cases td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); }
+    table.cases th { color: var(--muted); font-weight: 500; font-size: 12px; }
+    .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; }
+    .pill.ok { background: #e8f3ec; color: var(--ok); }
+    .pill.bad { background: #f8e9e8; color: var(--bad); }
+
+    .fail { border-left: 3px solid var(--warn); background: #fdf8ef; padding: 8px 11px; border-radius: 0 4px 4px 0; margin-bottom: 7px; font-size: 12.5px; }
+    .fail code { color: var(--warn); }
+
+    .steps { list-style: none; margin: 0; padding: 0; font-size: 12.5px; }
+    .steps li { padding: 6px 0; border-bottom: 1px solid var(--line-soft); display: flex; gap: 8px; }
+    .steps li:last-child { border-bottom: 0; }
+    .steps .badge { font: 10px var(--mono); color: var(--faint); flex: 0 0 64px; text-transform: uppercase; }
   </style>
 </head>
 <body>
-  <main class="shell">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">Skill Review / Path Diagnostics</div>
-        <h1>评审路径总览</h1>
-        <p class="subtitle">从总分下沉到路径、节点、工具调用和失败原因。</p>
+  <div class="layout">
+    <!-- 左侧栏目导航 -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="title">Skill Review</div>
+        <div class="sub">Skill 评审工作台</div>
       </div>
-      <div class="version"><span>当前评审版本</span><strong id="version">加载中…</strong></div>
-    </header>
-    <section class="metrics" id="metrics"></section>
-    <section class="workspace">
-      <aside class="panel sidebar">
-        <div class="panel-head"><h2>评审流程</h2><span class="count">Skill Review</span></div>
-        <nav class="stage-nav" id="stages" aria-label="Skill 评审流程"></nav>
-        <div class="subsection-head">当前模块 · Path</div>
-        <div class="panel-head"><h2>Path 清单</h2><span class="count" id="path-count"></span></div>
-        <div class="path-list" id="paths"></div>
-      </aside>
-      <section class="panel detail">
-        <div class="detail-head"><div><h2 id="detail-title">选择一条 Path</h2><p id="detail-subtitle">查看完整节点链路和对应测试结果</p></div><span id="detail-status" class="badge pass">待选择</span></div>
-        <div class="path-flow" id="flow"><div class="empty">暂无 Path 定义</div></div>
-        <div class="lower">
-          <div><h3 class="section-title">相关测试用例</h3><div id="cases"></div></div>
-          <div><h3 class="section-title">失败与注意事项</h3><div id="issues"></div></div>
+      <nav class="nav" id="nav"></nav>
+      <div class="ctx">
+        <div class="row"><span>当前 Skill</span><b id="ctx-skill">—</b></div>
+        <div class="row"><span>评审版本</span><b id="ctx-version">—</b></div>
+      </div>
+    </aside>
+
+    <!-- 右侧工作区 -->
+    <main class="work">
+      <!-- 视图 1：Skill 管理 -->
+      <section class="view" data-view="skills">
+        <div class="work-head">
+          <h1>Skill 管理</h1>
+          <p>管理每一个 Skill：上传、编写 SKILL.md，并从正文生成预设 Path。模型据各 Skill 的 description 自主匹配意图，Skill 之间扁平平级。</p>
+        </div>
+        <div class="split">
+          <div>
+            <div class="card">
+              <div class="card-head"><h2>Skill 列表</h2><span class="spacer"></span><button class="btn small" id="skill-new">新建</button></div>
+              <div class="list" id="skill-list"><div class="empty">加载中…</div></div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-head">
+                <h2 id="skill-title">选择一个 Skill</h2>
+                <span class="hint" id="skill-sub"></span>
+                <span class="spacer"></span>
+                <button class="btn small" id="skill-gen">生成预设 Path</button>
+                <button class="btn small primary" id="skill-save">保存</button>
+              </div>
+              <div class="card-body">
+                <label class="field"><span>SKILL.md（frontmatter + 正文）</span>
+                  <textarea id="skill-editor" rows="16" placeholder="选择左侧 Skill 后在此编辑…"></textarea>
+                </label>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>预设 Path</h2><span class="hint">从 SKILL.md 推导：意图识别 → 小 Skill 完整链路</span></div>
+              <div class="card-body" id="skill-path"><div class="empty">尚未生成 Path</div></div>
+            </div>
+          </div>
         </div>
       </section>
-    </section>
-  </main>
+
+      <!-- 视图 2：测试用例构建 -->
+      <section class="view" data-view="cases">
+        <div class="work-head">
+          <h1>测试用例构建</h1>
+          <p>构建用例 = 收集一次真实运行。把 SSE 事件流粘进来，解析并抽取成 Case（预期）与 Run（实际）。</p>
+        </div>
+        <div class="split">
+          <div>
+            <div class="card">
+              <div class="card-head"><h2>SSE 事件流</h2></div>
+              <div class="card-body">
+                <label class="field"><span>用户输入</span>
+                  <input type="text" id="ext-input" placeholder="例如：@expert:market 帮我拆解这个综艺的营销方案">
+                </label>
+                <label class="field"><span>粘贴事件流（每行一条 <code>data: {…}</code>，或直接贴 JSON 数组）</span>
+                  <textarea id="ext-raw" rows="12" placeholder='data: {"kind":"reasoning","text":"识别到 @expert:market …"}
+data: {"kind":"tool_call","text":"content-sim","tool":"content-sim"}
+data: {"kind":"tool_result","text":"{...}"}
+data: {"kind":"answer","text":"营销方案：…","done":true}'></textarea>
+                </label>
+                <button class="btn primary" id="ext-run">解析并抽取</button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-head"><h2>抽取结果</h2><span class="hint">按事件类型映射为节点</span></div>
+              <div class="card-body" id="ext-out"><div class="empty">粘贴事件流后点击「解析并抽取」</div></div>
+            </div>
+            <div class="card">
+              <div class="card-head"><h2>另存为</h2><span class="spacer"></span>
+                <button class="btn small" id="ext-save-run">保存为 Run</button>
+                <button class="btn small" id="ext-save-case">固化为 Case 基线</button>
+              </div>
+              <div class="card-body" id="ext-json"><div class="empty">抽取后可导出 JSON</div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 视图 3：评估对比 -->
+      <section class="view" data-view="eval">
+        <div class="work-head">
+          <h1>评估与对比</h1>
+          <p>用测试用例评估 Skill：核心是预期路径与实际路径的逐节点对比。</p>
+        </div>
+        <div class="metrics" id="eval-metrics"></div>
+        <div class="card">
+          <div class="card-head"><h2>用例</h2><span class="hint">选择一条查看路径对比</span></div>
+          <div class="card-body">
+            <table class="cases"><thead><tr><th>Case</th><th>名称</th><th>状态</th><th>首个失败</th></tr></thead>
+            <tbody id="eval-cases"></tbody></table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2 id="cmp-title">路径对比</h2><span class="hint" id="cmp-sub"></span></div>
+          <div class="card-body" id="cmp-body"><div class="empty">选择上方一条用例</div></div>
+        </div>
+      </section>
+
+      <!-- 视图 4：回归（规划） -->
+      <section class="view" data-view="regression">
+        <div class="work-head">
+          <h1>回归对比</h1>
+          <p>规划中：同一 Case 在不同 Skill 版本各跑一次，标出新修复 / 新回归 / 保持。</p>
+        </div>
+        <div class="card"><div class="card-body"><div class="empty">该模块在后续阶段实现（对应计划 M4）。</div></div></div>
+      </section>
+    </main>
+  </div>
+
   <script>
-    const state = { data: null, selected: null };
+    const S = { data: null, skills: [], skill: null, extracted: null, selectedCase: null, view: "skills" };
     const $ = (id) => document.getElementById(id);
-    const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
-    const pct = (value) => Number(value) < 0 ? "—" : `${(Number(value || 0) * 100).toFixed(1)}%`;
-    const kindLabel = (kind) => ({input:"输入", validation:"校验", decision:"判断", tool:"工具", output:"输出", fallback:"兜底"}[kind] || kind || "节点");
+    const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const pct = (v) => Number(v) < 0 || v == null ? "—" : `${(Number(v) * 100).toFixed(1)}%`;
+    const kindZh = (k) => ({ input: "输入", validation: "校验", decision: "判断", tool: "工具", output: "输出", fallback: "兜底", note: "注意" }[k] || k || "节点");
+
+    // ---------- 栏目导航 ----------
+    const VIEWS = [
+      { id: "skills", idx: "01", label: "Skill 管理" },
+      { id: "cases", idx: "02", label: "测试用例" },
+      { id: "eval", idx: "03", label: "评估对比" },
+      { id: "regression", idx: "04", label: "回归", planned: true },
+    ];
+    function renderNav() {
+      $("nav").innerHTML = VIEWS.map((v) => `
+        <button class="nav-item ${v.id === S.view ? "active" : ""} ${v.planned ? "planned" : ""}" data-nav="${v.id}">
+          <span class="idx">${v.idx}</span><span class="lbl">${esc(v.label)}</span>${v.planned ? '<span class="tag">规划</span>' : ""}
+        </button>`).join("");
+      document.querySelectorAll("[data-nav]").forEach((b) => b.onclick = () => switchView(b.dataset.nav));
+    }
+    function switchView(id) {
+      S.view = id;
+      document.querySelectorAll(".view").forEach((el) => el.classList.toggle("active", el.dataset.view === id));
+      renderNav();
+    }
+
+    // ---------- 模块一：Skill 管理 ----------
+    async function loadSkills() {
+      try {
+        const r = await fetch("/api/skills");
+        if (r.ok) { S.skills = await r.json(); }
+      } catch (_) { /* 无后端时用占位 */ }
+      if (!S.skills || !S.skills.length) {
+        S.skills = [{ name: "content-expert", description: "影视综专家模式模拟 CLI（营销/综艺/小说/剧本）。当用户表达 @expert:* 意图时使用。", rel_path: "skills/content-expert/SKILL.md" }];
+      }
+      renderSkillList();
+    }
+    function renderSkillList() {
+      $("skill-list").innerHTML = S.skills.map((s) => `
+        <button class="list-item ${S.skill && S.skill.name === s.name ? "active" : ""}" data-skill="${esc(s.name)}">
+          <div class="name">${esc(s.name)}</div>
+          <div class="desc">${esc(s.description || "")}</div>
+          <div class="meta">${esc(s.rel_path || "")}</div>
+        </button>`).join("") || `<div class="empty">没有发现 Skill</div>`;
+      document.querySelectorAll("[data-skill]").forEach((b) => b.onclick = () => selectSkill(b.dataset.skill));
+    }
+    async function selectSkill(name) {
+      S.skill = S.skills.find((s) => s.name === name) || { name };
+      $("skill-title").textContent = name;
+      $("skill-sub").textContent = S.skill.rel_path || "";
+      $("ctx-skill").textContent = name;
+      let body = S.skill.body || "";
+      try {
+        const r = await fetch("/api/skill?name=" + encodeURIComponent(name));
+        if (r.ok) { body = (await r.json()).content || body; }
+      } catch (_) {}
+      $("skill-editor").value = body || placeholderSkillMd(name);
+      renderSkillList();
+      $("skill-path").innerHTML = `<div class="empty">点击「生成预设 Path」从 SKILL.md 推导</div>`;
+    }
+    function placeholderSkillMd(name) {
+      return `---\nname: ${name}\ndescription: "在此描述做什么、何时触发（触发关键词是唯一信号）"\nmetadata: {"requires":{"bins":[]}}\n---\n\n# ${name}\n\n## 命令速查\n\n## 重要规则\n\n## 异常处理\n`;
+    }
+    async function saveSkill() {
+      if (!S.skill) { alert("请先选择一个 Skill"); return; }
+      const content = $("skill-editor").value;
+      try {
+        const r = await fetch("/api/skill?name=" + encodeURIComponent(S.skill.name), { method: "PUT", body: content });
+        alert(r.ok ? "已保存" : "保存失败（无后端时仅内存态）");
+      } catch (_) { S.skill.body = content; alert("已暂存到内存（未连接后端）"); }
+    }
+    // 规则版 Path 生成：从 SKILL.md 正文抽节点。意图匹配节点固定拼在最前。
+    async function genPath() {
+      if (!S.skill) { alert("请先选择一个 Skill"); return; }
+      const md = $("skill-editor").value;
+      let path = null;
+      try {
+        const r = await fetch("/api/skill/paths", { method: "POST", body: JSON.stringify({ name: S.skill.name, content: md }) });
+        if (r.ok) { path = await r.json(); }
+      } catch (_) {}
+      if (!path) { path = derivePathFromMd(S.skill.name, md); }
+      renderPathFlow($("skill-path"), path.nodes || [], path);
+    }
+    function derivePathFromMd(name, md) {
+      const nodes = [];
+      // 1) 意图匹配：模型据 description 命中该 Skill
+      const trig = (md.match(/@[a-z]+:[a-z\-]+/gi) || []).slice(0, 3).join(" / ");
+      nodes.push({ id: "match_intent", kind: "input", condition: `模型据 description 命中 ${name}${trig ? "（触发词 " + trig + "）" : ""}` });
+      // 2) 前置：必须先读 references
+      const ref = md.match(/references\/[\w.\-]+/);
+      if (/必须先读取|强制读取/.test(md) && ref) nodes.push({ id: "read_reference", kind: "validation", condition: "先读取 " + ref[0] });
+      // 3) 工具：命令速查里的可执行调用
+      const tools = [...md.matchAll(/bash\s+([\w./\-]+\/([\w\-]+))/g)];
+      tools.slice(0, 4).forEach((m) => nodes.push({ id: "run_" + m[2], kind: "tool", tool: m[2], condition: "执行 " + m[2] }));
+      // 4) 校验 / 注意事项
+      if (/重要规则|禁止|不得/.test(md)) nodes.push({ id: "verify_result", kind: "validation", condition: "按重要规则校验结果，禁止伪造" });
+      // 5) 异常
+      if (/异常处理|退出|重试/.test(md)) nodes.push({ id: "handle_error", kind: "fallback", condition: "工具失败时补参重试 / 友好提示" });
+      // 6) 输出
+      nodes.push({ id: "produce_output", kind: "output", condition: "产出结构化结果" });
+      return { path_id: "path_" + name.replace(/[^\w]/g, "_"), name: name + " 完整路径", entry_conditions: trig ? [trig] : [], nodes };
+    }
+
+    // ---------- 模块二：测试用例构建（SSE 抽取） ----------
+    function parseSSE(raw) {
+      raw = (raw || "").trim();
+      if (!raw) return [];
+      // 情况 A：直接是 JSON 数组
+      if (raw.startsWith("[")) { try { return JSON.parse(raw); } catch (_) {} }
+      // 情况 B：逐行 data: {…}
+      const events = [];
+      raw.split(/\r?\n/).forEach((line) => {
+        line = line.trim();
+        if (!line || line.startsWith(":") || line.startsWith("event:")) return;
+        const body = line.startsWith("data:") ? line.slice(5).trim() : line;
+        try { events.push(JSON.parse(body)); } catch (_) {}
+      });
+      return events;
+    }
+    function extract() {
+      const events = parseSSE($("ext-raw").value);
+      if (!events.length) { $("ext-out").innerHTML = `<div class="empty">未解析到有效事件</div>`; return; }
+      const nodes = [], toolCalls = [], chain = [];
+      let output = "";
+      events.forEach((e, i) => {
+        const kind = e.kind || (e.done ? "answer" : "answer");
+        if (kind === "reasoning") nodes.push({ node_id: "decide_" + i, kind: "decision", note: e.text });
+        else if (kind === "tool_call") { const t = e.tool || e.text; nodes.push({ node_id: "run_" + (t || i), kind: "tool", tool: t }); if (t) toolCalls.push(t); chain.push({ id: "call_" + (t || i), kind: "tool", tool: t }); }
+        else if (kind === "tool_result") nodes.push({ node_id: "result_" + i, kind: "tool", note: "工具返回" });
+        else if (kind === "answer") { if (!e.delta) output += (e.text || ""); }
+      });
+      if (!nodes.some((n) => n.kind === "output")) nodes.push({ node_id: "produce_output", kind: "output" });
+      const input = $("ext-input").value;
+      const run = {
+        case_id: "case-draft", selected_skills: guessSkills(input, events),
+        actual_path: nodes.map((n) => n.node_id), trace: nodes,
+        execution_chain: chain, tool_calls: toolCalls,
+        output_type: "analysis_report", output_text: output.slice(0, 4000),
+      };
+      const expected = {
+        path_id: "path_draft",
+        expected_skills: run.selected_skills.map((s) => ({ name: s, required: true })),
+        execution_chain: chain.map((c) => ({ ...c, required: true })),
+        nodes: run.actual_path,
+        output_spec: { type: "analysis_report" },
+      };
+      S.extracted = { input, run, expected };
+      renderExtract();
+    }
+    function guessSkills(input, events) {
+      const set = new Set();
+      events.forEach((e) => { if (e.skill) set.add(e.skill); });
+      const m = (input || "").match(/@expert:([a-z\-]+)/i);
+      if (m) set.add("content-expert");
+      return [...set];
+    }
+    function renderExtract() {
+      const { run } = S.extracted;
+      $("ext-out").innerHTML = `
+        <div style="margin-bottom:10px"><b>命中 Skill</b>：${run.selected_skills.map((s) => `<code>${esc(s)}</code>`).join(" ") || "—"}</div>
+        <div style="margin-bottom:10px"><b>工具调用</b>：${run.tool_calls.map((t) => `<code>${esc(t)}</code>`).join(" ") || "—"}</div>
+        <ul class="steps">${run.trace.map((n) => `<li><span class="badge">${esc(kindZh(n.kind))}</span><span>${esc(n.node_id)}${n.tool ? " · " + esc(n.tool) : ""}${n.note ? " — " + esc(String(n.note).slice(0, 60)) : ""}</span></li>`).join("")}</ul>`;
+      $("ext-json").innerHTML = `<textarea rows="10" readonly>${esc(JSON.stringify(S.extracted, null, 2))}</textarea>`;
+    }
+    function download(name, obj) {
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+      const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+    }
+
+    // ---------- 模块三：评估对比 ----------
     function renderMetrics(report) {
-      const items = [["用例通过", `${report.metrics.passed_cases}/${report.metrics.total_cases}`], ["Skill 命中率", pct(report.metrics.skill_selection_rate)], ["Path 覆盖率", pct(report.metrics.path_coverage)], ["Node 覆盖率", pct(report.metrics.node_coverage)], ["路径匹配率", pct(report.metrics.path_match_rate)], ["链路通过率", pct(report.metrics.chain_pass_rate)], ["注意事项通过率", pct(report.metrics.notice_pass_rate)], ["输出通过率", pct(report.metrics.output_pass_rate)]];
-      $("metrics").innerHTML = items.map(([label, value]) => `<div class="metric"><div class="metric-label">${label}</div><div class="metric-value">${esc(value)}</div></div>`).join("");
+      const m = report.metrics || {};
+      const items = [
+        ["用例通过", `${m.passed_cases ?? 0}/${m.total_cases ?? 0}`],
+        ["Skill 命中率", pct(m.skill_selection_rate)],
+        ["Path 覆盖率", pct(m.path_coverage)],
+        ["节点通过率", pct(m.node_pass_rate)],
+        ["路径匹配率", pct(m.path_match_rate)],
+        ["链路通过率", pct(m.chain_pass_rate)],
+        ["注意事项通过率", pct(m.notice_pass_rate)],
+        ["输出通过率", pct(m.output_pass_rate)],
+      ];
+      $("eval-metrics").innerHTML = items.map(([k, v]) => `<div class="metric"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`).join("");
     }
-    function renderStages(modules) {
-      $("stages").innerHTML = (modules || []).map((module) => `<div class="stage-item ${esc(module.status)}"><span class="stage-index">${String(module.order).padStart(2, "0")}</span><span><span class="stage-title">${esc(module.name)}</span><span class="stage-description">${esc(module.description)}</span></span><span class="stage-state">${module.status === "active" ? "当前" : "规划"}</span></div>`).join("");
+    function renderEvalCases(report) {
+      const rows = report.results || [];
+      $("eval-cases").innerHTML = rows.length ? rows.map((r) => {
+        const f = (r.failures || [])[0];
+        return `<tr data-case="${esc(r.case_id)}" style="cursor:pointer">
+          <td class="mono">${esc(r.case_id)}</td>
+          <td>${esc(r.name || "—")}</td>
+          <td><span class="pill ${r.passed ? "ok" : "bad"}">${r.passed ? "通过" : "失败"}</span></td>
+          <td>${f ? `<code>${esc(f.code)}</code>` : "—"}</td>
+        </tr>`;
+      }).join("") : `<tr><td colspan="4"><div class="empty">没有用例结果（用 -cases/-runs 启动，或从模块二导出后加载）</div></td></tr>`;
+      document.querySelectorAll("[data-case]").forEach((tr) => tr.onclick = () => showCompare(tr.dataset.case));
     }
-    function findResult(pathId) {
-      return state.data.report.results.filter((r) => r.expected.path_id === pathId);
+    function findPath(pid) { return (S.data.paths || []).find((p) => p.path_id === pid); }
+    function showCompare(caseId) {
+      const result = (S.data.report.results || []).find((r) => r.case_id === caseId);
+      if (!result) return;
+      S.selectedCase = caseId;
+      const exp = result.expected || {};
+      const path = findPath(exp.path_id);
+      const expectedNodes = path ? path.nodes : (exp.nodes || []).map((id) => ({ id, kind: "" }));
+      const actual = (result.actual && (result.actual.actual_path || [])) || [];
+      const failNodes = new Set((result.failures || []).map((f) => f.failed_node).filter(Boolean));
+      $("cmp-title").textContent = `${caseId} 路径对比`;
+      $("cmp-sub").textContent = result.passed ? "通过" : "存在失败";
+
+      const expTrack = expectedNodes.map((n) => {
+        const id = n.id || n; const hit = actual.includes(id);
+        return `<div class="pnode ${hit ? "ok" : "miss"} ${n.kind || ""}"><div class="kind">${esc(kindZh(n.kind))}</div><div class="id">${esc(id)}</div>${n.tool ? `<div class="tool">${esc(n.tool)}</div>` : ""}</div>`;
+      }).join("");
+      const expectedIds = expectedNodes.map((n) => n.id || n);
+      const actTrack = actual.map((id) => {
+        const bad = !expectedIds.includes(id) || failNodes.has(id);
+        return `<div class="pnode ${bad ? "bad" : "ok"}"><div class="kind">实际</div><div class="id">${esc(id)}</div></div>`;
+      }).join("");
+
+      const failures = (result.failures || []).map((f) => `<div class="fail"><code>${esc(f.code)}</code> · ${esc(f.message)}${f.failed_node ? ` · 节点 <code>${esc(f.failed_node)}</code>` : ""}</div>`).join("");
+      $("cmp-body").innerHTML = `
+        <div class="track"><div class="track-label">预期路径</div><div class="row">${expTrack || '<span class="empty">无预期节点</span>'}</div></div>
+        <div class="track"><div class="track-label">实际路径</div><div class="row">${actTrack || '<span class="empty">无实际节点</span>'}</div></div>
+        ${failures ? `<div style="margin-top:6px">${failures}</div>` : `<div class="empty">该用例无失败项</div>`}`;
     }
-    function renderPaths() {
-      const paths = state.data.paths || [];
-      $("path-count").textContent = `${paths.length} 条路径`;
-      $("paths").innerHTML = paths.length ? paths.map((path) => `<button class="path-item ${path.path_id === state.selected ? "active" : ""}" data-path="${esc(path.path_id)}"><span class="path-name">${esc(path.name || path.path_id)}</span><span class="path-id">${esc(path.path_id)}</span></button>`).join("") : `<div class="empty">没有加载 Path 定义</div>`;
-      document.querySelectorAll("[data-path]").forEach((button) => button.addEventListener("click", () => { state.selected = button.dataset.path; renderPaths(); renderDetail(); }));
-    }
-    function renderDetail() {
-      const path = (state.data.paths || []).find((item) => item.path_id === state.selected);
-      if (!path) return;
-      const results = findResult(path.path_id);
-      const failed = results.some((r) => !r.passed);
-      $("detail-title").textContent = path.name || path.path_id;
-      $("detail-subtitle").textContent = `${path.path_id} · ${path.entry_conditions?.join(" / ") || "无入口条件"}`;
-      $("detail-status").textContent = failed ? "存在失败" : "路径正常";
-      $("detail-status").className = `badge ${failed ? "fail" : "pass"}`;
-      $("flow").innerHTML = (path.nodes || []).map((node) => `<article class="node ${esc(node.kind)}"><div class="node-kind">${esc(kindLabel(node.kind))}</div><h3>${esc(node.id)}</h3><p>${esc(node.condition || node.expected_branch || "必经节点")}</p>${node.tool ? `<span class="tool">Tool · ${esc(node.tool)}</span>` : ""}</article>`).join("") || `<div class="empty">没有节点定义</div>`;
-      $("cases").innerHTML = results.length ? results.map((result) => `<div class="case-row"><div><div class="case-id">${esc(result.case_id)}</div><div class="case-name">${esc(result.name || "未命名用例")}</div></div><span class="status ${result.passed ? "pass" : "fail"}">${result.passed ? "通过" : "失败"}</span></div>`).join("") : `<div class="empty">没有关联测试用例</div>`;
-      const notes = (path.nodes || []).flatMap((node) => (node.notes || []).map((note) => `${node.id}：${note}`));
-      const failures = results.flatMap((result) => (result.failures || []).map((failure) => `<div class="failure"><code>${esc(failure.code)}</code> · ${esc(failure.message)}${failure.failed_node ? ` · 节点：${esc(failure.failed_node)}` : ""}</div>`));
-      $("issues").innerHTML = failures.join("") + (notes.length ? `<ul class="notes">${notes.map((note) => `<li>${esc(note)}</li>`).join("")}</ul>` : "") || `<div class="empty">暂无失败或注意事项</div>`;
-    }
+
+    // ---------- 启动 ----------
     async function boot() {
-      const response = await fetch("/api/data");
-      state.data = await response.json();
-      $("version").textContent = state.data.report.skill_version || "未标记版本";
-      renderStages(state.data.modules);
-      renderMetrics(state.data.report);
-      state.selected = state.data.paths?.[0]?.path_id || null;
-      renderPaths();
-      renderDetail();
+      renderNav();
+      switchView("skills");
+      loadSkills();
+      // 评估数据（复用现有 /api/data）
+      try {
+        const r = await fetch("/api/data");
+        S.data = await r.json();
+      } catch (_) { S.data = { report: { metrics: {}, results: [] }, paths: [] }; }
+      $("ctx-version").textContent = (S.data.report && S.data.report.skill_version) || "未标记";
+      renderMetrics(S.data.report || {});
+      renderEvalCases(S.data.report || {});
+
+      // 事件绑定
+      $("skill-save").onclick = saveSkill;
+      $("skill-gen").onclick = genPath;
+      $("skill-new").onclick = () => { const n = prompt("新建 Skill 名称"); if (n) { S.skills.unshift({ name: n, description: "", rel_path: "skills/" + n + "/SKILL.md" }); renderSkillList(); selectSkill(n); switchView("skills"); } };
+      $("ext-run").onclick = extract;
+      $("ext-save-run").onclick = () => { if (S.extracted) download("run.json", S.extracted.run); };
+      $("ext-save-case").onclick = () => { if (S.extracted) download("case.json", { case_id: "case-" + Date.now(), name: S.extracted.input || "抽取用例", input: { user_message: S.extracted.input }, expected: S.extracted.expected }); };
     }
-    boot().catch((error) => { $("version").textContent = "加载失败"; $("paths").innerHTML = `<div class="empty">${esc(error.message)}</div>`; });
+
+    function renderPathFlow(el, nodes, path) {
+      if (!nodes || !nodes.length) { el.innerHTML = `<div class="empty">没有节点</div>`; return; }
+      const head = path && path.entry_conditions && path.entry_conditions.length ? `<div class="track-label">入口：${esc(path.entry_conditions.join(" / "))}</div>` : "";
+      el.innerHTML = `<div class="track">${head}<div class="row">${nodes.map((n) => `<div class="pnode ${n.kind || ""}"><div class="kind">${esc(kindZh(n.kind))}</div><div class="id">${esc(n.id)}</div>${n.tool ? `<div class="tool">${esc(n.tool)}</div>` : ""}${n.condition ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">${esc(n.condition)}</div>` : ""}</div>`).join("")}</div></div>`;
+    }
+
+    boot().catch((e) => { document.querySelector(".work").insertAdjacentHTML("afterbegin", `<div class="fail">加载失败：${esc(e.message)}</div>`); });
   </script>
 </body>
 </html>
