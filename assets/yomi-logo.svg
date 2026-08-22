@@ -1,13 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-labelledby="title desc">
   <title id="title">yomi logo</title>
-  <desc id="desc">A minimal two-color y mark followed by the yomi wordmark.</desc>
+  <desc id="desc">A conversation-agent mark with connected reasoning nodes followed by the yomi wordmark.</desc>
   <g transform="translate(28 28)">
-    <path d="M45 30 95 80 145 30" fill="none" stroke="#18a999" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
-    <path d="M95 80v90" fill="none" stroke="#ff6b5f" stroke-width="22" stroke-linecap="round"/>
-    <path d="M46 30c-20 20-31 43-31 68 0 40 30 72 72 72" fill="none" stroke="#18a999" stroke-width="8" stroke-linecap="round" opacity=".35"/>
-    <circle cx="45" cy="30" r="11" fill="#18a999"/>
-    <circle cx="145" cy="30" r="11" fill="#18a999"/>
-    <circle cx="95" cy="170" r="11" fill="#ff6b5f"/>
+    <path d="M37 29h116c27 0 49 22 49 49v47c0 27-22 49-49 49H99l-34 25 7-25H37c-27 0-49-22-49-49V78c0-27 22-49 49-49Z" fill="#eef5f7" stroke="#253b68" stroke-width="10" stroke-linejoin="round"/>
+    <path d="m50 101 40-25 40 25 23-21" fill="none" stroke="#18a999" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="m50 101 40 30 40-30" fill="none" stroke="#ff6b5f" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="50" cy="101" r="13" fill="#253b68"/>
+    <circle cx="90" cy="76" r="13" fill="#18a999"/>
+    <circle cx="130" cy="101" r="13" fill="#ff6b5f"/>
+    <path d="M172 38v28M158 52h28" stroke="#ffb347" stroke-width="8" stroke-linecap="round"/>
   </g>
-  <text x="275" y="145" fill="#18233a" font-family="Nunito, Quicksand, Arial Rounded MT Bold, sans-serif" font-size="112" font-weight="700" letter-spacing="1">yomi</text>
+  <text x="275" y="145" fill="#253b68" font-family="Nunito, Quicksand, Arial Rounded MT Bold, sans-serif" font-size="112" font-weight="700" letter-spacing="1">yomi</text>
 </svg>
