@@ -3,14 +3,14 @@
   <desc id="desc">A conversation-agent mark with connected reasoning nodes followed by the yomi wordmark.</desc>
   <g transform="translate(28 28)">
     <path d="M37 29h116c27 0 49 22 49 49v47c0 27-22 49-49 49H99l-34 25 7-25H37c-27 0-49-22-49-49V78c0-27 22-49 49-49Z" fill="#f4f0ff" stroke="#5b4bdb" stroke-width="10" stroke-linejoin="round"/>
-    <path d="M91 65a39 39 0 0 1 35 21" fill="none" stroke="#18c8b0" stroke-width="10" stroke-linecap="round"/>
-    <path d="m126 86-2-19 17 10Z" fill="#18c8b0"/>
-    <path d="M129 108a39 39 0 0 1-36 21" fill="none" stroke="#ff5d8f" stroke-width="10" stroke-linecap="round"/>
-    <path d="m93 129 2 19-17-10Z" fill="#ff5d8f"/>
-    <path d="M83 129a39 39 0 0 1-1-43" fill="none" stroke="#5b4bdb" stroke-width="10" stroke-linecap="round"/>
-    <path d="m82 86 12 15-19 1Z" fill="#5b4bdb"/>
-    <circle cx="106" cy="98" r="14" fill="#ffd166"/>
-    <circle cx="106" cy="98" r="5" fill="#5b4bdb"/>
+    <path d="M88 68a39 39 0 0 1 38 18" fill="none" stroke="#18c8b0" stroke-width="8" stroke-linecap="round"/>
+    <path d="m126 86-2-15 14 9Z" fill="#18c8b0"/>
+    <path d="M130 111a39 39 0 0 1-37 22" fill="none" stroke="#ff5d8f" stroke-width="8" stroke-linecap="round"/>
+    <path d="m93 133 2 15-14-9Z" fill="#ff5d8f"/>
+    <path d="M80 130a39 39 0 0 1 0-43" fill="none" stroke="#5b4bdb" stroke-width="8" stroke-linecap="round"/>
+    <path d="m80 87 12 12-17 1Z" fill="#5b4bdb"/>
+    <circle cx="106" cy="100" r="11" fill="#ffd166"/>
+    <circle cx="106" cy="100" r="4" fill="#5b4bdb"/>
     <path d="M172 38v28M158 52h28" stroke="#ffd166" stroke-width="8" stroke-linecap="round"/>
   </g>
   <text x="275" y="145" fill="#5b4bdb" font-family="Nunito, Quicksand, Arial Rounded MT Bold, sans-serif" font-size="112" font-weight="700" letter-spacing="1">yomi</text>
