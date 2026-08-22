@@ -1,18 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 220" role="img" aria-labelledby="title desc">
   <title id="title">yomi logo</title>
-  <desc id="desc">A warm orange cat mark followed by the yomi wordmark.</desc>
+  <desc id="desc">An abstract loop mark with three connected nodes followed by the yomi wordmark.</desc>
   <rect width="760" height="220" rx="18" fill="#0b121a"/>
-  <g transform="translate(28 24)">
-    <path d="M22 65 22 8l45 32c16-8 35-12 54-12s38 4 54 12l45-32v57c0 58-42 107-99 107S22 123 22 65Z" fill="#f39a32"/>
-    <path d="m22 8 45 32-45 39Z" fill="#e87a1d"/>
-    <path d="m220 8-45 32 45 39Z" fill="#e87a1d"/>
-    <path d="M42 97c17-19 44-30 79-30s62 11 79 30c-8 38-38 63-79 63S50 135 42 97Z" fill="#ffc15d"/>
-    <path d="M121 72v88M42 97l79 18 79-18" fill="none" stroke="#d96b16" stroke-width="5" stroke-linecap="round"/>
-    <path d="M101 81 91 113M141 81l10 32" fill="none" stroke="#d96b16" stroke-width="5" stroke-linecap="round"/>
-    <ellipse cx="82" cy="99" rx="8" ry="13" fill="#8d3c12"/>
-    <ellipse cx="160" cy="99" rx="8" ry="13" fill="#8d3c12"/>
-    <path d="M114 120q7 8 14 0" fill="none" stroke="#8d3c12" stroke-width="5" stroke-linecap="round"/>
-    <path d="M49 115 12 106M49 129 13 132M193 115l37-9M193 129l36 3" fill="none" stroke="#d96b16" stroke-width="4" stroke-linecap="round"/>
+  <g transform="translate(28 25)">
+    <path d="M105 10c-45 0-82 34-82 76 0 38 28 66 65 66 31 0 54-18 54-44 0-22-17-37-39-37-19 0-34 12-34 29 0 16 12 28 29 28 30 0 67-29 67-74 0-25-15-44-38-44-15 0-26 8-34 19" fill="none" stroke="#f28a24" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M105 10c22 0 38 19 38 44 0 45-37 74-67 74" fill="none" stroke="#ffc15d" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="105" cy="10" r="12" fill="#ffc15d"/>
+    <circle cx="54" cy="100" r="12" fill="#f28a24"/>
+    <circle cx="132" cy="150" r="12" fill="#e35d2d"/>
+    <path d="M175 34h32M175 150h32" stroke="#44515e" stroke-width="5" stroke-linecap="round"/>
   </g>
-  <text x="275" y="145" fill="#e87518" font-family="Nunito, Quicksand, Arial Rounded MT Bold, sans-serif" font-size="112" font-weight="700" letter-spacing="1">yomi</text>
+  <text x="275" y="145" fill="#f28a24" font-family="Nunito, Quicksand, Arial Rounded MT Bold, sans-serif" font-size="112" font-weight="700" letter-spacing="1">yomi</text>
 </svg>
