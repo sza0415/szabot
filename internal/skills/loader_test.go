@@ -110,3 +110,13 @@ func TestAlwaysBodyNotInSummary(t *testing.T) {
 		t.Error("always skill body should be loaded")
 	}
 }
+
+func TestEnabledFiltersSkills(t *testing.T) {
+	ws := t.TempDir()
+	writeSkill(t, filepath.Join(ws, "skills"), "github", "---\nname: github\ndescription: \"GitHub\"\n---\n# GitHub body")
+	writeSkill(t, filepath.Join(ws, "skills"), "kbcli", "---\nname: kbcli\ndescription: \"影库\"\n---\n# KB body")
+	loader := NewLoader(ws, WithEnabled("kbcli"))
+	if strings.Contains(loader.Summary(), "github") || !strings.Contains(loader.Summary(), "kbcli") {
+		t.Fatalf("filtered summary = %q", loader.Summary())
+	}
+}

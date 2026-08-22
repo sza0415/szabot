@@ -164,10 +164,22 @@ func permissionMode() tools.PermissionMode {
 // 之所以固定拼在 system prompt 且启动后不变，是为了命中 KV Cache：
 // 动态内容只应追加在对话末尾，绝不插进前缀破坏缓存。
 func buildSystemPrompt(workspace string) string {
-	loader := skills.NewLoader(workspace)
-
 	var b strings.Builder
 	b.WriteString("You are yomi, a helpful AI assistant with local tools.\n")
+	mode := strings.TrimSpace(os.Getenv("SZABOT_SKILLS"))
+	if strings.EqualFold(mode, "off") {
+		return strings.TrimRight(b.String(), "\n")
+	}
+
+	var loader *skills.Loader
+	if strings.EqualFold(mode, "auto") {
+		loader = skills.NewLoader(workspace)
+	} else if mode != "" {
+		names := strings.Split(mode, ",")
+		loader = skills.NewLoader(workspace, skills.WithEnabled(names...))
+	} else {
+		return strings.TrimRight(b.String(), "\n")
+	}
 
 	if bodies := loader.AlwaysBodies(); bodies != "" {
 		b.WriteString("\n# Active Skills\n\n")

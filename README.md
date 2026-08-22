@@ -65,6 +65,24 @@ go run ./cmd/szabot
 yomi> echo: 你好
 ```
 
+### Skill 插件
+
+Skill 默认关闭。通用 Agent 可以显式启用自动发现，或只接入指定技能：
+
+```bash
+# 完全关闭 Skill，不扫描 skills/ 目录
+export SZABOT_SKILLS=off
+
+# 自动发现全部 Skill
+export SZABOT_SKILLS=auto
+
+# 只接入指定 Skill，名称使用 skills/ 下的目录名
+export SZABOT_SKILLS=kbcli,github
+```
+
+未设置 `SZABOT_SKILLS` 时等同于 `off`。列表模式中未列出的 Skill 不会进入模型上下文，
+也不会加载其 `always=true` 正文。
+
 ### 接入 DeepSeek（OpenAI 兼容）
 
 ```bash

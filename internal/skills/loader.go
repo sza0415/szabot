@@ -17,7 +17,8 @@ type Loader struct {
 	workspace   string // workspace 绝对路径，L1 摘要里的路径相对它计算
 	roots       []string
 	disabled    map[string]bool
-	skillSubdir string // workspace 下技能目录名，默认 "skills"
+	enabled     map[string]bool // 非 nil 时只允许指定技能
+	skillSubdir string          // workspace 下技能目录名，默认 "skills"
 }
 
 // Option 配置 Loader。
@@ -37,6 +38,22 @@ func WithDisabled(names ...string) Option {
 	return func(l *Loader) {
 		for _, n := range names {
 			l.disabled[n] = true
+		}
+	}
+}
+
+// WithEnabled restricts discovery to the named skills. An empty name list
+// keeps the default (all discovered skills) behavior.
+func WithEnabled(names ...string) Option {
+	return func(l *Loader) {
+		if len(names) == 0 {
+			return
+		}
+		l.enabled = map[string]bool{}
+		for _, n := range names {
+			if n = strings.TrimSpace(n); n != "" {
+				l.enabled[n] = true
+			}
 		}
 	}
 }
@@ -71,7 +88,7 @@ func (l *Loader) List() []Skill {
 				continue
 			}
 			name := e.Name()
-			if seen[name] || l.disabled[name] {
+			if seen[name] || l.disabled[name] || (l.enabled != nil && !l.enabled[name]) {
 				continue
 			}
 			abs := filepath.Join(root, name, "SKILL.md")
