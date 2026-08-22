@@ -26,6 +26,7 @@ const (
 	EventInputReceived         = "input.received"
 	EventSystemMessage         = "system.message"
 	EventContextInjected       = "context.injected"
+	EventContextCompacted      = "context.compacted"
 	EventModelRequestStarted   = "model.request.started"
 	EventModelResponseFinished = "model.response.finished"
 	EventModelRequestFailed    = "model.request.failed"

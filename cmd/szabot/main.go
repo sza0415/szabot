@@ -67,6 +67,17 @@ func main() {
 
 	// Conversation 只保存用户与最终回答；内部推理和工具轨迹单独进入 traces。
 	rootDir := sessionDir(workspace)
+	contextMaxTokens := envIntDefault("SZABOT_MAX_CONTEXT_TOKENS", 6000)
+	contextRecentMessages := envIntDefault("SZABOT_CONTEXT_RECENT_MESSAGES", 8)
+	summaryTimeout := 30 * time.Second
+	runTimeout := envDuration("SZABOT_RUN_TIMEOUT", 3*time.Minute)
+	budget := agent.RunBudget{
+		MaxInputTokens:  envInt("SZABOT_MAX_INPUT_TOKENS"),
+		MaxOutputTokens: envInt("SZABOT_MAX_OUTPUT_TOKENS"),
+		MaxTotalTokens:  envInt("SZABOT_MAX_TOTAL_TOKENS"),
+		MaxModelCalls:   envInt("SZABOT_MAX_MODEL_CALLS"),
+		MaxToolCalls:    envInt("SZABOT_MAX_TOOL_CALLS"),
+	}
 	store, err := agent.NewSessionStore(filepath.Join(rootDir, "conversations"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: init session store: %v\n", err)
@@ -91,16 +102,19 @@ func main() {
 		Trace:        traceSink,
 		Snapshots:    runSnapshots,
 		SystemPrompt: systemPrompt,
-		RunTimeout:   envDuration("SZABOT_RUN_TIMEOUT", 3*time.Minute),
-		Budget: agent.RunBudget{
-			MaxInputTokens:  envInt("SZABOT_MAX_INPUT_TOKENS"),
-			MaxOutputTokens: envInt("SZABOT_MAX_OUTPUT_TOKENS"),
-			MaxTotalTokens:  envInt("SZABOT_MAX_TOTAL_TOKENS"),
-			MaxModelCalls:   envInt("SZABOT_MAX_MODEL_CALLS"),
-			MaxToolCalls:    envInt("SZABOT_MAX_TOOL_CALLS"),
+		Context: &agent.ContextManager{
+			Store:            store,
+			Provider:         provider,
+			Model:            model,
+			MaxContextTokens: contextMaxTokens,
+			RecentMessages:   contextRecentMessages,
+			SummaryTimeout:   summaryTimeout,
 		},
+		RunTimeout: runTimeout,
+		Budget:     budget,
 	}
 	loop.Start(ctx)
+	printRuntimeConfig(provider, model, workspace, rootDir, contextMaxTokens, contextRecentMessages, summaryTimeout, runTimeout, budget)
 
 	// 4. 选择前端 channel。
 	//
@@ -141,6 +155,24 @@ func main() {
 	// 5. 等退出信号。
 	<-ctx.Done()
 	fmt.Println("\nyomi stopped.")
+}
+
+func printRuntimeConfig(provider providers.Provider, model, workspace, sessionRoot string, maxContextTokens, recentMessages int, summaryTimeout, runTimeout time.Duration, budget agent.RunBudget) {
+	fmt.Println("yomi configuration:")
+	fmt.Printf("  provider=%s model=%s workspace=%s\n", provider.Name(), model, workspace)
+	fmt.Printf("  session_dir=%s\n", sessionRoot)
+	fmt.Printf("  context.max_tokens=%d context.recent_messages=%d context.summary_timeout=%s\n", maxContextTokens, recentMessages, summaryTimeout)
+	fmt.Printf("  run.timeout=%s\n", runTimeout)
+	fmt.Printf("  budget.input_tokens=%s output_tokens=%s total_tokens=%s model_calls=%s tool_calls=%s\n",
+		limitText(budget.MaxInputTokens), limitText(budget.MaxOutputTokens), limitText(budget.MaxTotalTokens), limitText(budget.MaxModelCalls), limitText(budget.MaxToolCalls))
+	fmt.Printf("  permission_mode=%s\n", permissionMode())
+}
+
+func limitText(value int) string {
+	if value <= 0 {
+		return "unlimited"
+	}
+	return strconv.Itoa(value)
 }
 
 func permissionMode() tools.PermissionMode {
@@ -369,6 +401,19 @@ func envInt(key string) int {
 	return parsed
 }
 
+func envIntDefault(key string, fallback int) int {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		fmt.Fprintf(os.Stderr, "warning: ignore invalid %s=%q\n", key, value)
+		return fallback
+	}
+	return parsed
+}
+
 func envDuration(key string, fallback time.Duration) time.Duration {
 	value := strings.TrimSpace(os.Getenv(key))
 	if value == "" {
@@ -399,7 +444,6 @@ func buildProvider() (providers.Provider, string) {
 	switch providerEnv {
 	case "deepseek":
 		key := os.Getenv("DEEPSEEK_API_KEY")
-		fmt.Printf("DEBUG: DEEPSEEK_API_KEY=%q\n", key)
 		if key == "" {
 			fmt.Fprintln(os.Stderr, "error: DEEPSEEK_API_KEY is not set")
 			os.Exit(1)

@@ -193,6 +193,7 @@ RunID 和 SessionID 保存在每条事件内部，文件名本身不能直接反
 | `system.message` | 完整 system prompt |
 | `input.received` | 用户输入、Channel、历史消息数量 |
 | `context.injected` | 临时 Agent 状态栏 |
+| `context.compacted` | 长会话超出预算后生成 rolling summary |
 | `model.request.started` | Provider、模型、完整请求消息、工具定义数量和本轮完整工具定义 |
 | `model.response.finished` | finish reason、usage、首 Token 时间、耗时 |
 | `model.request.failed` | 模型请求错误 |

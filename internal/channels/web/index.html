@@ -497,6 +497,7 @@
     "input.received": "INPUT",
     "system.message": "SYSTEM",
     "context.injected": "CONTEXT",
+    "context.compacted": "CONTEXT COMPACTED",
     "model.request.started": "MODEL REQUEST",
     "model.response.finished": "MODEL RESPONSE",
     "model.request.failed": "MODEL FAILED",
@@ -610,7 +611,7 @@
     if (event.type.indexOf("model.") === 0) return "model";
     if (event.type.indexOf("tool.") === 0) return "tool";
     if (event.type === "assistant.message.completed") return "assistant";
-    if (event.type === "context.injected") return "context";
+    if (event.type.indexOf("context.") === 0) return "context";
     if (event.type === "system.message") return "system";
     if (event.type.indexOf("user.question.") === 0) return "question";
     return "run";

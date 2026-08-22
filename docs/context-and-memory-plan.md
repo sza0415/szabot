@@ -45,24 +45,24 @@ Inbound
 
 ### M1：Context Builder 与预算控制
 
-- [ ] 新增 `ContextManager` 接口，Loop 不再直接负责历史拼装。
-- [ ] 定义 `ContextRequest`、`ContextResult`、`ContextSource` 数据结构。
-- [ ] 统一计算 system、历史、状态栏、检索结果和当前输入的 token 预算。
-- [ ] 配置 context limit、保留最近消息数和压缩触发阈值。
+- [x] 新增 `ContextManager`，Loop 不再直接负责历史拼装。
+- [x] 定义基础 `ContextResult` 数据结构。
+- [x] 估算 system、历史和当前输入的 token 预算。
+- [x] 配置 context limit、保留最近消息数和压缩触发阈值。
 - [ ] 在发送模型前记录最终上下文的来源、消息数和估算 token 数。
-- [ ] 保证 system prompt 前缀稳定，动态内容追加在上下文末尾。
+- [x] 保证 system prompt 前缀稳定，动态内容追加在上下文末尾。
 - [ ] 预算不足时返回可观测的 `context_budget_exceeded`，不能静默截断当前用户输入。
 
 验收：固定输入下能断言最终 messages 顺序；超过阈值时仍保留当前请求、最近对话和未完成任务。
 
 ### M2：Rolling Summary 与 Conversation Compaction
 
-- [ ] 为 Session 增加摘要元数据：summary、覆盖消息范围、版本、更新时间。
-- [ ] 实现按 token 阈值触发的 compaction，而不是按固定轮数硬截断。
+- [x] 为 Session 增加摘要元数据：summary、覆盖消息范围、版本、更新时间。
+- [x] 实现按 token 阈值触发的 compaction，而不是按固定轮数硬截断。
 - [ ] 摘要至少包含：事实、用户约束、已做决定、未完成任务、关键文件/资源引用。
 - [ ] 保留最近若干轮原文，较早历史替换为一条结构化 summary message。
 - [ ] compaction 具备幂等性；重复执行不会不断膨胀摘要。
-- [ ] 摘要失败时保留旧摘要和原始历史，不能破坏可恢复性。
+- [x] 摘要失败时保留旧摘要和原始历史，不能破坏可恢复性。
 - [ ] 支持手动重建摘要，便于格式升级和故障恢复。
 
 验收：长会话压缩前后，关键事实和未完成任务可被模型正确回答；原始 JSONL 仍可审计。

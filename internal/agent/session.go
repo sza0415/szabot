@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/ziangsun/szabot/internal/providers"
 )
@@ -27,6 +28,12 @@ type SessionStore struct {
 
 	mu    sync.Mutex
 	cache map[string][]providers.Message
+}
+
+type sessionSummary struct {
+	Summary       string `json:"summary"`
+	CoveredCount  int    `json:"covered_count"`
+	UpdatedAtUnix int64  `json:"updated_at_unix"`
 }
 
 // NewSessionStore 在 dir 下创建/使用会话目录。dir 不存在会被自动创建。
@@ -91,6 +98,42 @@ func (s *SessionStore) Append(sessionID string, messages ...providers.Message) e
 	return nil
 }
 
+// LoadSummary returns the last compacted summary for a session.
+func (s *SessionStore) LoadSummary(sessionID string) (string, int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := os.ReadFile(s.summaryPath(sessionID))
+	if os.IsNotExist(err) {
+		return "", 0, nil
+	}
+	if err != nil {
+		return "", 0, fmt.Errorf("agent: read session summary %q: %w", sessionID, err)
+	}
+	var summary sessionSummary
+	if err := json.Unmarshal(data, &summary); err != nil {
+		return "", 0, fmt.Errorf("agent: parse session summary %q: %w", sessionID, err)
+	}
+	return summary.Summary, summary.CoveredCount, nil
+}
+
+// SaveSummary atomically persists compacted summary metadata.
+func (s *SessionStore) SaveSummary(sessionID, summary string, coveredCount int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := json.Marshal(sessionSummary{Summary: summary, CoveredCount: coveredCount, UpdatedAtUnix: time.Now().Unix()})
+	if err != nil {
+		return fmt.Errorf("agent: marshal session summary: %w", err)
+	}
+	tmp := s.summaryPath(sessionID) + ".tmp"
+	if err := os.WriteFile(tmp, append(data, '\n'), 0o600); err != nil {
+		return fmt.Errorf("agent: write session summary: %w", err)
+	}
+	if err := os.Rename(tmp, s.summaryPath(sessionID)); err != nil {
+		return fmt.Errorf("agent: replace session summary: %w", err)
+	}
+	return nil
+}
+
 func (s *SessionStore) path(sessionID string) string {
 	// 清洗 sessionID，避免路径穿越（如 "../x"）。
 	safe := filepath.Base(filepath.Clean("/" + sessionID))
@@ -98,6 +141,10 @@ func (s *SessionStore) path(sessionID string) string {
 		safe = "default"
 	}
 	return filepath.Join(s.dir, safe+".jsonl")
+}
+
+func (s *SessionStore) summaryPath(sessionID string) string {
+	return strings.TrimSuffix(s.path(sessionID), ".jsonl") + ".summary.json"
 }
 
 func (s *SessionStore) readFile(sessionID string) ([]providers.Message, error) {

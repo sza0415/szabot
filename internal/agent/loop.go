@@ -51,6 +51,8 @@ type Loop struct {
 	Budget RunBudget
 	// SystemPrompt 是一段固定的系统提示，作为每轮对话的首条 system 消息。
 	SystemPrompt string
+	// Context 可选地为长会话启用预算控制和 rolling summary。
+	Context *ContextManager
 
 	mu       sync.Mutex
 	pending  map[string]*pendingAsk
@@ -213,35 +215,64 @@ func (l *Loop) handleRun(ctx context.Context, in bus.InboundMessage, run *Run) {
 
 	userMsg := providers.Message{Role: providers.RoleUser, Content: in.Text}
 
-	// 1. 加载历史（不含 system prompt）。Store 为空时按无历史处理。
-	var history []providers.Message
-	if l.Store != nil {
-		loaded, err := l.Store.Load(in.SessionID)
+	// 1. 通过 ContextManager 加载并按预算构造本轮上下文。
+	var messages []providers.Message
+	historyCount := 0
+	if l.Context != nil {
+		built, err := l.Context.Build(ctx, in.SessionID, l.SystemPrompt, userMsg)
 		if err != nil {
-			log.Printf("[loop] load session=%s error: %v", in.SessionID, err)
-			// 加载失败不致命：退化成本轮无历史，至少不阻断当前对话。
-		} else {
-			history = loaded
+			log.Printf("[loop] build context session=%s error: %v", in.SessionID, err)
+			status := RunFailed
+			if errors.Is(err, context.DeadlineExceeded) {
+				status = RunTimedOut
+			} else if errors.Is(err, context.Canceled) {
+				status = RunCancelled
+			}
+			if transitionErr := l.transitionRun(ctx, run, status, err.Error()); transitionErr != nil {
+				log.Printf("[loop] run=%s context error transition failed: %v", run.ID, transitionErr)
+			}
+			run.setError(err)
+			l.persistSnapshot(run)
+			l.record(ctx, run, tracing.EventRunFinished, string(status), map[string]any{"error": err.Error()})
+			return
 		}
+		messages, historyCount = built.Messages, built.HistoryCount
+		if built.Compaction != nil {
+			c := built.Compaction
+			l.record(ctx, run, tracing.EventContextCompacted, "completed", map[string]any{
+				"covered_count_before": c.CoveredBefore, "covered_count_after": c.CoveredAfter,
+				"estimated_tokens_before": c.BeforeTokens, "estimated_tokens_after": c.AfterTokens,
+				"recent_message_count": c.RecentMessages, "summary": c.Summary,
+				"summary_duration_ms": c.Duration.Milliseconds(),
+			})
+		}
+	} else {
+		var history []providers.Message
+		if l.Store != nil {
+			loaded, err := l.Store.Load(in.SessionID)
+			if err != nil {
+				log.Printf("[loop] load session=%s error: %v", in.SessionID, err)
+			} else {
+				history = loaded
+			}
+		}
+		if l.SystemPrompt != "" {
+			messages = append(messages, providers.Message{Role: providers.RoleSystem, Content: l.SystemPrompt})
+			l.record(ctx, run, tracing.EventSystemMessage, "", map[string]any{
+				"role": "system", "content": l.SystemPrompt,
+			})
+		}
+		messages = append(messages, history...)
+		messages = append(messages, userMsg)
+		historyCount = len(history)
 	}
-
-	// 2. 组装本次请求：system(恒在最前) + 历史 + 本轮 user。
-	//    system 不进 Store，仅在发送前拼接，保证前缀稳定、对 KV Cache 友好。
-	messages := make([]providers.Message, 0, len(history)+2)
-	if l.SystemPrompt != "" {
-		messages = append(messages, providers.Message{
-			Role:    providers.RoleSystem,
-			Content: l.SystemPrompt,
-		})
-		l.record(ctx, run, tracing.EventSystemMessage, "", map[string]any{
-			"role": "system", "content": l.SystemPrompt,
-		})
+	// system 不进 Store，仅在发送前拼接，保证前缀稳定。
+	if l.Context != nil && l.SystemPrompt != "" {
+		l.record(ctx, run, tracing.EventSystemMessage, "", map[string]any{"role": "system", "content": l.SystemPrompt})
 	}
-	messages = append(messages, history...)
-	messages = append(messages, userMsg)
 	l.record(ctx, run, tracing.EventInputReceived, "", map[string]any{
 		"role": "user", "content": in.Text, "channel_id": in.ChannelID,
-		"history_message_count": len(history),
+		"history_message_count": historyCount,
 	})
 
 	// 把回信地址挂到当前 Run Context，供工具进行用户交互。
@@ -579,16 +610,18 @@ func renderQuestion(question string, options []string) string {
 func (l *Loop) deliverAnswer(sessionID, text string) bool {
 	l.mu.Lock()
 	wait, ok := l.pending[sessionID]
-	if ok {
-		delete(l.pending, sessionID)
-	}
 	l.mu.Unlock()
 
 	if !ok {
 		return false
 	}
-	// answer 是带缓冲的（容量 1），这里不会阻塞。
-	wait.answer <- text
+	// 保持 pending 登记直到 Ask 消费回答并执行 defer 清理。这样在
+	// 前端重复提交/重连时，后续文本不会被误当成一个新的 Run。
+	select {
+	case wait.answer <- text:
+	default:
+		// 已经有回答在等待消费，丢弃重复提交但仍视为已路由。
+	}
 	return true
 }
 

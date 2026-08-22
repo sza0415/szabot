@@ -118,3 +118,22 @@ collect:
 		t.Fatalf("tool result message = %#v, want answer 蓝", toolMsg)
 	}
 }
+
+func TestLoopDuplicateAnswerDoesNotBecomeNewRun(t *testing.T) {
+	loop := &Loop{pending: map[string]*pendingAsk{}}
+	wait := &pendingAsk{answer: make(chan string, 1)}
+	loop.pending["s1"] = wait
+
+	if !loop.deliverAnswer("s1", "Allow once") {
+		t.Fatal("first answer was not routed")
+	}
+	if !loop.deliverAnswer("s1", "Allow once") {
+		t.Fatal("duplicate answer should remain associated with pending run")
+	}
+	if got := <-wait.answer; got != "Allow once" {
+		t.Fatalf("answer = %q", got)
+	}
+	if _, ok := loop.pending["s1"]; !ok {
+		t.Fatal("pending answer removed before Ask consumed it")
+	}
+}

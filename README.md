@@ -65,6 +65,27 @@ go run ./cmd/szabot
 yomi> echo: 你好
 ```
 
+### 上下文管理
+
+yomi 会按 SessionID 保存 Conversation 历史，并在发送给模型前估算上下文大小。短会话
+直接使用完整历史；超过预算时，较早消息会由当前 Provider 压缩为 rolling summary，
+再将摘要、最近几条消息和当前输入发送给 Agent。原始 Conversation 不会被删除，摘要
+单独保存在会话目录的 `<session>.summary.json` 文件中。
+
+```bash
+# 单轮模型请求允许使用的上下文预算，默认 6000（按字符数近似估算 token）
+export SZABOT_MAX_CONTEXT_TOKENS=8000
+
+# 超限压缩后保留的最近消息条数，默认 8
+export SZABOT_CONTEXT_RECENT_MESSAGES=10
+
+go run ./cmd/szabot
+```
+
+`SZABOT_MAX_CONTEXT_TOKENS` 越大，模型可看到更多历史，但单次请求的 token 成本和延迟
+也会增加。`SZABOT_CONTEXT_RECENT_MESSAGES` 越大，近期对话保留越完整，但可用于摘要和
+当前问题的预算会减少。建议先保持默认值，只有长会话频繁触发压缩时再提高上下文预算。
+
 ### Skill 插件
 
 Skill 默认关闭。通用 Agent 可以显式启用自动发现，或只接入指定技能：
