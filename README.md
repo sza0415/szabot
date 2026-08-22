@@ -1,3 +1,11 @@
+<p align="center">
+  <img src="assets/yomi-logo.svg" alt="yomi" width="620">
+</p>
+
+<p align="center">一个用 Go 实现的轻量 agent 框架</p>
+
+<br>
+
 # yomi
 
 一个用 Go 实现的轻量 agent 框架，围绕一条极简的 agent 循环（消息总线 → AgentLoop → Runner → Provider）构建，核心保持精简，能力从边缘扩展。
