@@ -207,6 +207,22 @@ Harness 用来验证 Agent 在运行时、故障、安全和资源边界下仍�
 - [x] 宿主侧 PermissionGate：只读工具自动放行，高风险工具请求用户批准
 - [ ] 完整的越权攻击集、审批审计事件和 workspace 子目录级策略
 
+权限模式通过 `SZABOT_PERMISSION_MODE` 配置：
+
+```bash
+# 默认：只读工具自动允许，写入、Shell、Python 和网络工具需要用户批准
+export SZABOT_PERMISSION_MODE=safe
+
+# 允许 write_file、edit_file 和 todo_write；Shell、Python、网络工具仍需批准
+export SZABOT_PERMISSION_MODE=workspace-write
+
+# 跳过 PermissionGate 的用户审批；workspace 路径限制和 Docker 沙盒仍然生效
+export SZABOT_PERMISSION_MODE=full
+```
+
+三个模式只控制宿主侧审批，不会扩大 workspace 路径边界，也不会自动开启 Docker 网络。
+生产环境建议使用 `safe`；只有在用户明确承担写入或执行风险时才使用其他模式。
+
 ### 测试与评测 Harness
 
 - [x] Runner、Provider、工具和取消流程的确定性单元测试
