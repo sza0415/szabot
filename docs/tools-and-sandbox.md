@@ -120,7 +120,7 @@ go run ./cmd/szabot
 
 主程序目前只通过环境变量暴露镜像、网络和 `/tmp` 大小；超时、内存、CPU、PID 和输出上限使用代码默认值。
 
-如果 Docker CLI 不在 `PATH` 中，yomi 会跳过 `bash` 和 `python`。如果 CLI 存在但 daemon 未启动或镜像不可用，通常会在第一次执行时返回错误。
+如果 Docker CLI 不在 `PATH` 中，或 CLI 无法连接到正在运行的 Docker daemon，yomi 会在启动时跳过 `bash` 和 `python` 并打印原因。镜像是否存在不在启动时检查，仍会在第一次执行时报告。
 
 ## 5. 容器隔离模型
 

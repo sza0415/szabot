@@ -11,6 +11,7 @@
 - [`function-calling-flow.md`](function-calling-flow.md)：工具注册、模型调用、工具执行和结果回传。
 - [`tools-and-sandbox.md`](tools-and-sandbox.md)：文件工具、联网工具和 Docker 沙盒的权限边界。
 - [`skill-execution-path-review.md`](skill-execution-path-review.md)：Skill 渐进式加载和 Path 评审实现。
+- [`context-and-memory-plan.md`](context-and-memory-plan.md)：Context 管理、长会话压缩和长期 Memory 的建设计划。
 
 ## 设计与变更复盘
 

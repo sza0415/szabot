@@ -60,11 +60,39 @@ func TestNewSandboxRequiresDocker(t *testing.T) {
 	}
 }
 
+func TestProbeDocker(t *testing.T) {
+	t.Run("daemon unavailable", func(t *testing.T) {
+		dir := t.TempDir()
+		binary := filepath.Join(dir, "docker")
+		if err := os.WriteFile(binary, []byte("#!/bin/sh\necho 'Cannot connect to the Docker daemon' >&2\nexit 1\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		err := probeDocker(binary)
+		if err == nil || !strings.Contains(err.Error(), "Docker daemon is not available") {
+			t.Fatalf("probeDocker() error = %v, want daemon unavailable", err)
+		}
+	})
+
+	t.Run("daemon available", func(t *testing.T) {
+		dir := t.TempDir()
+		binary := filepath.Join(dir, "docker")
+		if err := os.WriteFile(binary, []byte("#!/bin/sh\n[ \"$1\" = info ]\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := probeDocker(binary); err != nil {
+			t.Fatalf("probeDocker() error = %v, want nil", err)
+		}
+	})
+}
+
 // TestSandboxRunEcho actually runs a container. It is skipped when docker is
 // not installed so CI without docker stays green.
 func TestSandboxRunEcho(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skip("docker not available; skipping sandbox integration test")
+	}
+	if err := probeDocker("docker"); err != nil {
+		t.Skipf("docker daemon not available; skipping sandbox integration test: %v", err)
 	}
 
 	sandbox, err := NewSandbox(SandboxConfig{

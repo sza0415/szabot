@@ -32,6 +32,7 @@ type SandboxConfig struct {
 
 const (
 	defaultSandboxTimeout   = 30 * time.Second
+	dockerProbeTimeout      = 3 * time.Second
 	defaultSandboxMaxOutput = 64 * 1024
 	defaultSandboxMemory    = "512m"
 	defaultSandboxCPUs      = "1.0"
@@ -70,7 +71,7 @@ type Sandbox struct {
 	cfg SandboxConfig
 }
 
-// NewSandbox validates config and that the docker binary is present, then
+// NewSandbox validates config, the docker binary, and the Docker daemon, then
 // returns a reusable sandbox. Image availability is not checked here — the
 // first run will surface a clear "pull image" error if it is missing.
 func NewSandbox(cfg SandboxConfig) (*Sandbox, error) {
@@ -84,7 +85,31 @@ func NewSandbox(cfg SandboxConfig) (*Sandbox, error) {
 	if _, err := exec.LookPath(cfg.DockerBinary); err != nil {
 		return nil, fmt.Errorf("sandbox: %q not found in PATH: %w", cfg.DockerBinary, err)
 	}
+	if err := probeDocker(cfg.DockerBinary); err != nil {
+		return nil, err
+	}
 	return &Sandbox{cfg: cfg}, nil
+}
+
+// probeDocker confirms that the CLI can reach a running Docker daemon. A CLI
+// binary may be installed while Docker Desktop/the daemon is stopped, so a
+// PATH lookup alone is not sufficient to enable execution tools.
+func probeDocker(binary string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), dockerProbeTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binary, "info", "--format", "{{.ServerVersion}}")
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return fmt.Errorf("sandbox: Docker daemon is not available (docker info timed out after %s)", dockerProbeTimeout)
+	}
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			msg = err.Error()
+		}
+		return fmt.Errorf("sandbox: Docker daemon is not available: %s", msg)
+	}
+	return nil
 }
 
 // Run executes argv inside a fresh container, piping stdin into it. It returns
