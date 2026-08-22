@@ -9,7 +9,41 @@ package providers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 )
+
+type ErrorClass string
+
+const (
+	ErrorRetryable    ErrorClass = "retryable"
+	ErrorNonRetryable ErrorClass = "non_retryable"
+	ErrorCancelled    ErrorClass = "cancelled"
+)
+
+// ProviderError preserves the underlying error while making retry semantics explicit.
+type ProviderError struct {
+	Class      ErrorClass
+	StatusCode int
+	Code       string
+	Err        error
+}
+
+func (e *ProviderError) Error() string { return e.Err.Error() }
+func (e *ProviderError) Unwrap() error { return e.Err }
+
+func (e *ProviderError) Retryable() bool { return e != nil && e.Class == ErrorRetryable }
+
+func NewProviderError(class ErrorClass, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &ProviderError{Class: class, Err: err}
+}
+
+func IsRetryable(err error) bool {
+	var pe *ProviderError
+	return errors.As(err, &pe) && pe.Retryable()
+}
 
 // Role 是对话消息的角色，沿用 OpenAI 兼容惯例。
 type Role string

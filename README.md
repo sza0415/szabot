@@ -13,9 +13,9 @@
 - **多通道**：CLI（stdin/stdout）与 Web（HTTP + SSE 流式聊天）两种前端。
 - **多 Provider**：统一 LLM 接口，内置 Echo（零依赖验证）与 OpenAI-compatible 实现；主程序当前通过环境变量装配 Echo 或 DeepSeek。
 - **工具箱**：文件类工具（read/write/edit/list_dir/glob/grep）开箱即用，可选的 bash/python 执行类工具跑在 Docker 沙盒里。
-- **技能系统（Skills）**：三层渐进式披露，L1 元数据常驻、L2/L3 按需 `read_file` 加载，往 `skills/` 丢个目录即可扩展。
+- **技能系统（Skills）**：从 workspace 加载技能，并在 Agent 运行过程中按需提供给模型。
 - **会话历史**：按 SessionID 持久化为 jsonl，同一会话自动带上上下文。
-- **Skill 评审工具（skill-review）**：独立的本地工作台，对 Skill 做执行路径建模与预期/实际对比，支持 LLM 抽取 Path，不依赖 Docker。
+- **Skill 评审工具（skill-review）**：独立的本地评审入口，不参与主 Agent 运行链路。
 
 > 设计宪法：Core stays small，所有新功能挂在 channel / tool / provider / skill 边上，不往核心循环塞业务。
 
@@ -25,7 +25,7 @@
 szabot/
 ├── cmd/
 │   ├── szabot/             # CLI 入口（main.go：只做装配）
-│   └── skill-review/       # Skill 路径评审工具（独立，不依赖 Docker）
+│   └── skill-review/       # Skill 评审入口（独立工具）
 ├── internal/
 │   ├── bus/                # 消息总线（系统中枢）
 │   ├── agent/              # 核心循环
@@ -33,8 +33,8 @@ szabot/
 │   │   └── runner.go       #   内层：跟 LLM 来回打交道
 │   ├── channels/           # 通道（平台翻译官）
 │   │   └── cli.go          #   stdin/stdout 实现
-│   ├── skills/             # 技能系统（三层渐进式披露）
-│   ├── skillreview/        # Skill 评审内核（Path/Node/Case/Run/Evaluate/Report）
+│   ├── skills/             # 技能加载与运行支持
+│   ├── skillreview/        # Skill 评审内核
 │   └── providers/          # LLM 提供商
 │       ├── provider.go              #   统一接口
 │       ├── echo.go                  #   假实现，零依赖验证链路
@@ -189,6 +189,35 @@ system prompt、用户输入、实际模型请求、reasoning、assistant 消息
 完整的数据格式、事件清单、写入时机和安全边界见
 [`docs/conversation-and-trace.md`](docs/conversation-and-trace.md)。
 
+## Harness
+
+Harness 用来验证 Agent 在运行时、故障、安全和资源边界下仍然可控。详细设计与里程碑见
+[`README_2.md`](README_2.md)。当前状态：
+
+### 运行时 Harness
+
+- [x] 状态栏、用户提问、断连取消、流式输出和 Trace 持久化
+- [x] Run / Model / Tool 三层状态、Run Snapshot 和 Web 状态查询
+- [x] Provider 与工具错误分类、有限次数重试和指数退避
+
+### 安全与权限 Harness
+
+- [x] 文件工具限制在 workspace 内，拒绝路径穿越和越界 symlink
+- [x] Bash/Python Docker 沙盒：资源限制、临时文件系统和默认禁网
+- [x] 宿主侧 PermissionGate：只读工具自动放行，高风险工具请求用户批准
+- [ ] 完整的越权攻击集、审批审计事件和 workspace 子目录级策略
+
+### 测试与评测 Harness
+
+- [x] Runner、Provider、工具和取消流程的确定性单元测试
+- [ ] Deterministic Provider、Scenario Runner、事件契约和真实任务回归集
+
+本地运行全部测试：
+
+```bash
+go test ./...
+```
+
 ## 路线图
 
 - [x] M1 项目骨架
@@ -244,7 +273,7 @@ export SZABOT_SANDBOX=1
 # export SZABOT_SANDBOX_TMP_SIZE=512m   # 默认 64m
 ```
 
-未开启 `SZABOT_SANDBOX` 或找不到 Docker 时，yomi 会跳过 `bash` 和 `python`，
+未开启 `SZABOT_SANDBOX`、找不到 Docker CLI 或 Docker daemon 未运行时，yomi 会跳过 `bash` 和 `python`，
 其他工具仍可使用。每次执行都会创建临时容器，默认限制为 30 秒、512 MB 内存、
 1 个 CPU、256 个进程和 64 KiB 返回输出；根文件系统只读，`/tmp` 使用临时文件系统，
 网络默认关闭。
@@ -261,85 +290,22 @@ workspace 外部的符号链接，仍存在越界写风险。因此不要在工�
 Docker 安装、镜像选择、完整限制和安全边界见
 [`docs/tools-and-sandbox.md`](docs/tools-and-sandbox.md)。
 
-## 技能（Skills）
+## 技能与评审
 
-yomi 从 workspace 的 `skills/<name>/SKILL.md` 发现技能。当前仓库包含：
+yomi 的主 Agent 运行链路会从 workspace 发现技能，并在需要时将技能内容加载进模型上下文。
 
-| Skill | 加载方式 | 作用 | 主要依赖 |
-|---|---|---|---|
-| `szbot` | 常驻（`always: true`） | 影库意图识别、路由、输入消歧和公共护栏 | 无 |
-| `kbcli` | 按需读取 | 影视综数据查询、结构化 ID 查询和专家问答 | `kbcli` CLI |
-
-技能采用渐进式披露：
-
-1. 非常驻 Skill 的名称、描述、路径和依赖状态作为 L1 摘要注入 system prompt；
-2. Agent 命中意图后使用 `read_file` 读取对应 `SKILL.md`；
-3. 复杂流程再按 Skill 指引读取 `references/` 等 L3 资源；
-4. `always: true` 且依赖满足的 Skill 正文会直接常驻 system prompt，不重复出现在 L1 摘要中。
-
-当前 `szbot` 是常驻路由入口，负责将请求路由到 `kbcli`；`kbcli` 的查数与专家问答
-是互斥链路，执行前必须读取其 `SKILL.md` 和对应 `references/`。实际能力与参数以
-[`skills/szbot/SKILL.md`](skills/szbot/SKILL.md) 和
-[`skills/kbcli/SKILL.md`](skills/kbcli/SKILL.md) 为准。
-
-Skill 是否可用由 frontmatter 的 `requires.bins` 和 `requires.env` 决定。依赖缺失时，
-Loader 仍会在 L1 摘要中列出该 Skill，但标记为 `unavailable`。代码还支持 workspace
-Skill 覆盖同名内置 Skill 和显式禁用 Skill；当前主程序只装载 workspace 的 `skills/`。
-
-详细设计见 [`docs/skill-execution-path-review.md`](docs/skill-execution-path-review.md)。
+详细的技能定义、依赖声明和加载机制见 [`docs/skill-execution-path-review.md`](docs/skill-execution-path-review.md)。
 
 ## Skill 评审（skill-review）
 
-`cmd/skill-review` 是独立的本地评审工具，用于管理 `SKILL.md`、生成执行 Path，
-并将测试用例的预期路径与实际 Run 对比。它本身不执行 Skill，也不要求 Docker。
-
-启动 Web 工作台：
-
-```bash
-go run ./cmd/skill-review \
-  -serve \
-  -addr 127.0.0.1:8090 \
-  -workspace .
-```
-
-生成 Markdown/JSON 报告：
-
-```bash
-go run ./cmd/skill-review \
-  -cases cases.json \
-  -runs runs.json \
-  -paths paths.json \
-  -markdown report.md \
-  -json report.json \
-  -skill-version local
-```
-
-非 Web 模式下，`-cases` 和 `-runs` 必填，`-paths` 可选。评审结果包含 Skill 命中、
-执行链、Path/Node、注意事项和输出等指标。
-
-Path 生成支持 `auto`、`llm` 和 `rule` 三种引擎。`auto` 默认优先使用已配置的 LLM，
-失败后回退规则抽取；生成结果可缓存为 `skills/<name>/PATH.json`。DeepSeek 配置与主程序
-一致，建议显式设置模型：
-
-```bash
-export SZABOT_PROVIDER=deepseek
-export DEEPSEEK_API_KEY=sk-xxxxxxxx
-export DEEPSEEK_MODEL=deepseek-v4-pro
-```
-
-> Skill Review Web 服务没有认证，并且能够修改 workspace 中的 `SKILL.md` 和
-> `PATH.json`。请仅监听 `127.0.0.1`，不要暴露到公网或不可信局域网。
-
-详细的数据模型、评估指标、Path 生成和界面设计见：
-
-- [`docs/skill-execution-path-review.md`](docs/skill-execution-path-review.md)
-- [`docs/skill-review-plan.md`](docs/skill-review-plan.md)
-- [`docs/skill-review-ui-redesign.md`](docs/skill-review-ui-redesign.md)
+`cmd/skill-review` 是与主 Agent 解耦的独立评审入口，用于离线检查技能执行路径，不参与主运行链路。
+数据模型、评估方式和界面设计见 [`docs/skill-review-plan.md`](docs/skill-review-plan.md) 与
+[`docs/skill-review-ui-redesign.md`](docs/skill-review-ui-redesign.md)。
 
 ## 项目地图（overview）
 
-Overview 会实时读取 workspace 的 `skills/` 和 `docs/`，展示项目规模、L1 摘要、常驻
-Skill 正文体积、架构、消息流、工具与文档索引。它不执行 Skill，也不依赖 Docker。
+Overview 会实时读取 workspace 的 `skills/` 和 `docs/`，展示项目规模、架构、消息流、
+工具与文档索引。它不执行 Skill，也不依赖 Docker。
 
 ```bash
 go run ./cmd/overview -addr 127.0.0.1:8091 -workspace .

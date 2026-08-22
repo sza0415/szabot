@@ -153,13 +153,21 @@ func (p *OpenAICompatibleProvider) ChatStream(
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("provider: do request: %w", err)
+		class := ErrorRetryable
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			class = ErrorCancelled
+		}
+		return ChatResponse{}, NewProviderError(class, fmt.Errorf("provider: do request: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		snippet := readSnippet(resp.Body, 500)
-		return ChatResponse{}, fmt.Errorf("provider: http %d: %s", resp.StatusCode, snippet)
+		class := ErrorNonRetryable
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			class = ErrorRetryable
+		}
+		return ChatResponse{}, &ProviderError{Class: class, StatusCode: resp.StatusCode, Err: fmt.Errorf("provider: http %d: %s", resp.StatusCode, snippet)}
 	}
 
 	var content strings.Builder
@@ -193,8 +201,7 @@ func (p *OpenAICompatibleProvider) ChatStream(
 				err, truncate(data, 300))
 		}
 		if chunk.Error != nil {
-			return ChatResponse{}, fmt.Errorf("provider: api error: %s (%s)",
-				chunk.Error.Message, chunk.Error.Code)
+			return ChatResponse{}, &ProviderError{Class: ErrorNonRetryable, Code: chunk.Error.Code, Err: fmt.Errorf("provider: api error: %s (%s)", chunk.Error.Message, chunk.Error.Code)}
 		}
 		if chunk.Usage != nil {
 			usage = chunk.Usage.internal()

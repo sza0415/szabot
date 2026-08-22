@@ -51,9 +51,10 @@ func main() {
 	todoTool := registerTools(registry, workspace)
 
 	runner := &agent.Runner{
-		Provider: provider,
-		Model:    model,
-		Tools:    registry,
+		Provider:       provider,
+		Model:          model,
+		Tools:          registry,
+		PermissionGate: tools.NewPolicyGate(permissionMode()),
 		// Agent 状态栏：让 Runner 每轮把 todo_write 的任务清单与进度
 		// 作为一条 user 消息注入到上下文末尾，供模型自我感知计划与进度。
 		Status: todoTool,
@@ -140,6 +141,17 @@ func main() {
 	// 5. 等退出信号。
 	<-ctx.Done()
 	fmt.Println("\nyomi stopped.")
+}
+
+func permissionMode() tools.PermissionMode {
+	switch strings.TrimSpace(strings.ToLower(os.Getenv("SZABOT_PERMISSION_MODE"))) {
+	case string(tools.PermissionWorkspaceWrite):
+		return tools.PermissionWorkspaceWrite
+	case string(tools.PermissionFull):
+		return tools.PermissionFull
+	default:
+		return tools.PermissionSafe
+	}
 }
 
 // buildSystemPrompt 组装系统提示：基础说明 + 技能系统的 L1 摘要。
@@ -292,6 +304,7 @@ func registerSandboxTools(registry *tools.Registry, workspace string) {
 		fmt.Fprintf(os.Stderr, "warn: sandbox unavailable, skipping bash/python: %v\n", err)
 		return
 	}
+	fmt.Println("docker daemon available; sandbox execution checks passed")
 
 	bash, err := tools.NewBash(bashSandbox)
 	if err != nil {

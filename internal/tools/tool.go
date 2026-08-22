@@ -19,6 +19,12 @@ type Tool interface {
 	Execute(ctx context.Context, arguments json.RawMessage) (string, error)
 }
 
+// RetryClassifier is optional. Tools with idempotent, transient operations may
+// implement it to opt into Runner-level retries.
+type RetryClassifier interface {
+	Retryable(error) bool
+}
+
 // Definition is the provider-neutral schema sent to the model.
 type Definition struct {
 	Name        string
@@ -112,4 +118,15 @@ func (r *Registry) Execute(ctx context.Context, name string, arguments json.RawM
 		return "", fmt.Errorf("tools: tool %q is not registered (available: %s)", name, strings.Join(names, ", "))
 	}
 	return tool.Execute(ctx, arguments)
+}
+
+// Lookup returns a registered tool for callers that need optional capabilities.
+func (r *Registry) Lookup(name string) (Tool, bool) {
+	if r == nil {
+		return nil, false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	t, ok := r.tools[name]
+	return t, ok
 }

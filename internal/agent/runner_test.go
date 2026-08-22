@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -69,6 +70,69 @@ func (echoTool) Execute(_ context.Context, arguments json.RawMessage) (string, e
 		return "", err
 	}
 	return "tool result: " + input.Value, nil
+}
+
+type retryProvider struct {
+	attempts int
+	err      error
+}
+
+func (p *retryProvider) Name() string { return "retry-provider" }
+func (p *retryProvider) Chat(context.Context, providers.ChatRequest) (providers.ChatResponse, error) {
+	p.attempts++
+	if p.attempts == 1 && p.err != nil {
+		return providers.ChatResponse{}, p.err
+	}
+	return providers.ChatResponse{Content: "ok"}, nil
+}
+
+type retryTool struct{ attempts int }
+
+func (t *retryTool) Name() string                { return "retry_tool" }
+func (t *retryTool) Description() string         { return "retry tool" }
+func (t *retryTool) Parameters() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
+func (t *retryTool) Retryable(error) bool        { return true }
+func (t *retryTool) Execute(context.Context, json.RawMessage) (string, error) {
+	t.attempts++
+	if t.attempts == 1 {
+		return "", errors.New("temporary")
+	}
+	return "done", nil
+}
+
+func TestRunnerRetriesRetryableProviderError(t *testing.T) {
+	provider := &retryProvider{err: providers.NewProviderError(providers.ErrorRetryable, errors.New("temporary"))}
+	runner := &Runner{Provider: provider, Model: "test", Retry: RetryPolicy{MaxAttempts: 2}}
+	result, err := runner.RunCollect(context.Background(), nil, StreamSink{})
+	if err != nil || result.Answer != "ok" || provider.attempts != 2 || result.Usage.ModelCalls != 2 {
+		t.Fatalf("result=%#v err=%v attempts=%d", result, err, provider.attempts)
+	}
+}
+
+func TestRunnerDoesNotRetryNonRetryableProviderError(t *testing.T) {
+	provider := &retryProvider{err: providers.NewProviderError(providers.ErrorNonRetryable, errors.New("bad request"))}
+	runner := &Runner{Provider: provider, Model: "test", Retry: RetryPolicy{MaxAttempts: 3}}
+	_, err := runner.RunCollect(context.Background(), nil, StreamSink{})
+	if err == nil || provider.attempts != 1 {
+		t.Fatalf("err=%v attempts=%d", err, provider.attempts)
+	}
+}
+
+func TestRunnerRetriesOptedInTool(t *testing.T) {
+	tool := &retryTool{}
+	registry := tools.NewRegistry()
+	if err := registry.Register(tool); err != nil {
+		t.Fatal(err)
+	}
+	provider := &scriptedProvider{responses: []providers.ChatResponse{
+		{ToolCalls: []providers.ToolCall{{ID: "call_1", Name: "retry_tool", Arguments: json.RawMessage(`{}`)}}},
+		{Content: "finished"},
+	}}
+	runner := &Runner{Provider: provider, Model: "test", Tools: registry, ToolRetry: RetryPolicy{MaxAttempts: 2}}
+	answer, err := runner.Run(context.Background(), nil)
+	if err != nil || answer != "finished" || tool.attempts != 2 {
+		t.Fatalf("answer=%q err=%v attempts=%d", answer, err, tool.attempts)
+	}
 }
 
 func TestRunnerExecutesToolAndContinuesConversation(t *testing.T) {

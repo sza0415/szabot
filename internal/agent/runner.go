@@ -10,6 +10,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -105,7 +106,47 @@ type Runner struct {
 
 	// Status 提供每轮注入到上下文末尾的「Agent 状态栏」（任务清单/进度等）。
 	// 为 nil 时不注入任何状态栏（退化为无状态栏行为）。
-	Status StatusProvider
+	Status         StatusProvider
+	Retry          RetryPolicy
+	ToolRetry      RetryPolicy
+	PermissionGate tools.PermissionGate
+}
+
+type RetryPolicy struct {
+	MaxAttempts  int
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+}
+
+func (p RetryPolicy) attempts() int {
+	if p.MaxAttempts < 0 {
+		return 1
+	}
+	if p.MaxAttempts == 0 {
+		return 3
+	}
+	return p.MaxAttempts
+}
+
+func (p RetryPolicy) delay(attempt int) time.Duration {
+	initial := p.InitialDelay
+	if initial <= 0 && p.MaxAttempts == 0 {
+		initial = 200 * time.Millisecond
+	}
+	if initial <= 0 {
+		return 0
+	}
+	d := initial
+	for i := 1; i < attempt; i++ {
+		if p.MaxDelay > 0 && d >= p.MaxDelay/2 {
+			return p.MaxDelay
+		}
+		d *= 2
+	}
+	if p.MaxDelay > 0 && d > p.MaxDelay {
+		return p.MaxDelay
+	}
+	return d
 }
 
 // ModelCallEvent 描述一次模型请求及其结果，Step 从 1 开始。
@@ -248,11 +289,11 @@ func (r *Runner) RunCollect(
 
 	for turn := 0; turn < maxTurns; turn++ {
 		step := turn + 1
-		response, err := r.chatOnce(ctx, conversation, step, sink)
+		response, err, attempts := r.chatWithRetry(ctx, conversation, step, sink)
+		usage.ModelCalls += attempts
 		if err != nil {
 			return RunResult{Messages: produced, Usage: usage}, err
 		}
-		usage.ModelCalls++
 		usage.Usage.Add(response.Usage)
 
 		assistant := providers.Message{
@@ -306,7 +347,7 @@ func (r *Runner) RunCollect(
 			}
 
 			started := time.Now()
-			result, toolErr := r.Tools.Execute(ctx, call.Name, call.Arguments)
+			result, toolErr := r.executeToolWithRetry(ctx, call.Name, call.Arguments)
 			duration := time.Since(started)
 			if toolErr != nil {
 				result = "Error: " + toolErr.Error()
@@ -342,6 +383,88 @@ func (r *Runner) RunCollect(
 	}
 
 	return RunResult{Messages: produced, Usage: usage}, fmt.Errorf("agent: exceeded maximum tool turns (%d)", maxTurns)
+}
+
+func waitRetry(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	}
+	t := time.NewTimer(delay)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+func (r *Runner) executeToolWithRetry(ctx context.Context, name string, args json.RawMessage) (string, error) {
+	if r.PermissionGate != nil {
+		if err := r.PermissionGate.Check(ctx, tools.PermissionRequest{Tool: name, Arguments: args, Reason: permissionReason(name)}); err != nil {
+			return "", err
+		}
+	}
+	tool, ok := r.Tools.Lookup(name)
+	if !ok {
+		return r.Tools.Execute(ctx, name, args)
+	}
+	classifier, optedIn := tool.(tools.RetryClassifier)
+	max := r.ToolRetry.attempts()
+	for attempt := 1; attempt <= max; attempt++ {
+		result, err := tool.Execute(ctx, args)
+		if err == nil || !optedIn || !classifier.Retryable(err) || attempt == max {
+			return result, err
+		}
+		if err := waitRetry(ctx, r.ToolRetry.delay(attempt)); err != nil {
+			return "", err
+		}
+	}
+	return "", context.Canceled
+}
+
+func permissionReason(name string) string {
+	switch name {
+	case "bash", "python":
+		return "this tool can execute arbitrary code and may modify files"
+	case "write_file", "edit_file":
+		return "this tool modifies workspace files"
+	case "web_fetch", "web_search":
+		return "this tool accesses external network resources"
+	default:
+		return "this tool is not read-only"
+	}
+}
+
+func (r *Runner) chatWithRetry(ctx context.Context, conversation []providers.Message, step int, sink StreamSink) (providers.ChatResponse, error, int) {
+	max := r.Retry.attempts()
+	for attempt := 1; attempt <= max; attempt++ {
+		producedToken := false
+		wrapped := sink
+		previousFinished := sink.OnModelCallFinished
+		wrapped.OnModelCallFinished = func(event ModelCallEvent) {
+			producedToken = event.FirstTokenSet
+			if previousFinished != nil {
+				previousFinished(event)
+			}
+		}
+		response, err := r.chatOnce(ctx, conversation, step, wrapped)
+		if err == nil {
+			return response, nil, attempt
+		}
+		if !providers.IsRetryable(err) || producedToken || attempt == max {
+			return providers.ChatResponse{}, err, attempt
+		}
+		if err := waitRetry(ctx, r.Retry.delay(attempt)); err != nil {
+			return providers.ChatResponse{}, err, attempt
+		}
+	}
+	return providers.ChatResponse{}, context.Canceled, max
 }
 
 // chatOnce 发起单轮模型调用，并通过结构化回调报告请求快照与完成状态。

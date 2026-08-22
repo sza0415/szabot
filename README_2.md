@@ -43,7 +43,7 @@ yomi 已经具备几类运行时 harness 的雏形：
 - [x] H5 三层状态机：统一表示 Run、Model、Tool 的状态和合法转换
 - [x] H6 Run Snapshot：保存任务状态，并在进程重启后标记未完成 Run
 - [x] H7 Web 状态查询：展示三层状态并支持按 session/status 查询 Run
-- [ ] H8 运行时重试策略：区分可重试的 Provider/工具错误和不可重试错误
+- [x] H8 运行时重试策略：区分可重试的 Provider/工具错误和不可重试错误
 
 ### 运行时示例
 

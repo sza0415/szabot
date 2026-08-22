@@ -33,6 +33,10 @@ func askerFrom(ctx context.Context) (Asker, bool) {
 	return asker, ok && asker != nil
 }
 
+// AskerFromContext exposes the host-controlled interaction channel to policy
+// gates. Tool implementations should normally use the private helper above.
+func AskerFromContext(ctx context.Context) (Asker, bool) { return askerFrom(ctx) }
+
 var askUserQuestionParameters = json.RawMessage(`{
 	"type": "object",
 	"properties": {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -165,13 +166,13 @@ func toOpenAIToolDefinitions(definitions []ToolDefinition) []openAIToolDefinitio
 // Chat 发起一次 chat completions 调用。
 func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	if p.BaseURL == "" {
-		return ChatResponse{}, errors.New("provider: BaseURL is empty")
+		return ChatResponse{}, NewProviderError(ErrorNonRetryable, errors.New("provider: BaseURL is empty"))
 	}
 	if p.APIKey == "" {
-		return ChatResponse{}, errors.New("provider: APIKey is empty")
+		return ChatResponse{}, NewProviderError(ErrorNonRetryable, errors.New("provider: APIKey is empty"))
 	}
 	if req.Model == "" {
-		return ChatResponse{}, errors.New("provider: model is empty")
+		return ChatResponse{}, NewProviderError(ErrorNonRetryable, errors.New("provider: model is empty"))
 	}
 
 	// 1. 把内部会话与工具定义转成 OpenAI wire format。
@@ -206,7 +207,13 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return ChatResponse{}, fmt.Errorf("provider: do request: %w", err)
+		class := ErrorRetryable
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			class = ErrorCancelled
+		} else if _, ok := err.(net.Error); !ok {
+			class = ErrorNonRetryable
+		}
+		return ChatResponse{}, NewProviderError(class, fmt.Errorf("provider: do request: %w", err))
 	}
 	defer resp.Body.Close()
 
@@ -217,11 +224,18 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 
 	// 3. 非 2xx 直接返回带原始内容的错误，便于排查 401/429/400 等。
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return ChatResponse{}, fmt.Errorf(
-			"provider: http %d: %s",
-			resp.StatusCode,
-			truncate(string(respBody), 500),
-		)
+		class := ErrorNonRetryable
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500 {
+			class = ErrorRetryable
+		}
+		return ChatResponse{}, &ProviderError{
+			Class: class, StatusCode: resp.StatusCode,
+			Err: fmt.Errorf(
+				"provider: http %d: %s",
+				resp.StatusCode,
+				truncate(string(respBody), 500),
+			),
+		}
 	}
 
 	// 4. 解析 JSON。
@@ -231,8 +245,8 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 			err, truncate(string(respBody), 500))
 	}
 	if parsed.Error != nil {
-		return ChatResponse{}, fmt.Errorf("provider: api error: %s (%s)",
-			parsed.Error.Message, parsed.Error.Code)
+		return ChatResponse{}, &ProviderError{Class: ErrorNonRetryable, Code: parsed.Error.Code, Err: fmt.Errorf("provider: api error: %s (%s)",
+			parsed.Error.Message, parsed.Error.Code)}
 	}
 	if len(parsed.Choices) == 0 {
 		return ChatResponse{}, errors.New("provider: no choices in response")
